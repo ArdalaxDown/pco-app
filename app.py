@@ -741,7 +741,7 @@ def exportar_historial():
     query = """
         SELECT fecha, turno, operador_turno, spco_turno, empresa, responsable, ubicacion_zona, 
                num_personas, tetra, hora_inicio, hora_fin, estado,
-               usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo 
+               usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario 
         FROM seguimiento_vias 
         WHERE 1=1
     """
@@ -757,9 +757,9 @@ def exportar_historial():
         query += " AND empresa = %s"
         params.append(empresa)
     if buscar_texto:
-        query += " AND (responsable ILIKE %s OR ubicacion_zona ILIKE %s OR codigo_vehiculo ILIKE %s OR conductor_vehiculo ILIKE %s)"
+        query += " AND (responsable ILIKE %s OR ubicacion_zona ILIKE %s OR codigo_vehiculo ILIKE %s OR conductor_vehiculo ILIKE %s OR comentario ILIKE %s)"
         term = f"%{buscar_texto}%"
-        params.extend([term, term, term, term])
+        params.extend([term, term, term, term, term])
 
     query += " ORDER BY fecha ASC, hora_inicio ASC;"
 
@@ -775,7 +775,7 @@ def exportar_historial():
     ws.title = "Historial Filtrado PCO"
     ws.views.sheetView[0].showGridLines = True
 
-    ws.merge_cells('A1:P1')
+    ws.merge_cells('A1:Q1')
     ws['A1'] = "REPORTE HISTÓRICO DE SEGUIMIENTO DE TRABAJOS EN VÍA"
     ws['A1'].font = Font(name='Arial', size=14, bold=True, color='FFFFFF')
     ws['A1'].fill = PatternFill(start_color='333f48', end_color='333f48', fill_type='solid')
@@ -783,7 +783,7 @@ def exportar_historial():
     ws.row_dimensions[1].height = 40
 
     headers = ["Fecha", "Turno", "Operador ATS", "Supervisor SPCO", "Empresa", "Responsable", "Zona Ocupada", 
-               "N° Pers.", "TETRA", "Hora Inicio", "Hora Fin", "Estado", "¿Usa Vehículo?", "Tipo Vehículo", "Código Vehículo", "Conductor"]
+               "N° Pers.", "TETRA", "Hora Inicio", "Hora Fin", "Estado", "¿Usa Vehículo?", "Tipo Vehículo", "Código Vehículo", "Conductor", "Comentario"]
     ws.append([]) 
     ws.append(headers)
 
@@ -812,13 +812,21 @@ def exportar_historial():
                 cell.value = value
             cell.font = Font(name='Arial', size=10)
             cell.border = thin_border
-            cell.alignment = Alignment(horizontal='center', vertical='center')
+            # Alinear al centros; comentarios a la izquierda con wrap para que se vea completo
+            if c_idx == 17:
+                cell.alignment = Alignment(horizontal='left', vertical='center', wrap_text=True)
+            else:
+                cell.alignment = Alignment(horizontal='center', vertical='center')
         ws.row_dimensions[r_idx].height = 20
 
     for col in ws.columns:
         max_len = max(len(str(cell.value or '')) for cell in col)
         col_letter = openpyxl.utils.get_column_letter(col[0].column)
-        ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
+        # comentarios: ancho mínimo mayor y máximo de 60 (wrap activo)
+        if col_letter == 'Q':
+            ws.column_dimensions[col_letter].width = max(min(max_len + 3, 60), 25)
+        else:
+            ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
 
     excel_stream = io.BytesIO()
     wb.save(excel_stream)

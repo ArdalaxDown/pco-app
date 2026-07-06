@@ -391,8 +391,8 @@
                                             <strong>SPCO:</strong> {{ r[14] }}
                                         </td>
                                         <td class="small text-start" style="max-width: 200px;">
-                                            <div id="comentarioDisplay-{{ r[0] }}" class="{% if r[21] %}{% else %}text-muted fst-italic{% endif %}" style="cursor:pointer; min-height: 24px;" onclick="editarComentario({{ r[0] }}, this)" title="Click para agregar/editar comentario">
-                                                {% if r[21] %}{{ r[21] }}{% else %}<span class="small">+ agregar…</span>{% endif %}
+                                            <div id="comentarioDisplay-{{ r[0] }}" class="{% if r[20] %}{% else %}text-muted fst-italic{% endif %}" style="cursor:pointer; min-height: 24px;" onclick="editarComentario({{ r[0] }}, this)" title="Click para agregar/editar comentario">
+                                                {% if r[20] %}{{ r[20] }}{% else %}<span class="small">+ agregar…</span>{% endif %}
                                             </div>
                                         </td>
                                         <td class="text-nowrap">
@@ -459,7 +459,7 @@
                             <div class="col mb-2"><label class="form-label-l2">N° Personas</label><input type="number" class="form-control form-control-sm" name="num_personas" value="{{ r[7] }}" required></div>
                             <div class="col mb-2"><label class="form-label-l2">TETRA</label><input type="text" class="form-control form-control-sm" name="tetra" value="{{ r[10] }}"></div>
                         </div>
-                        <div class="mb-2"><label class="form-label-l2">Comentario del Permiso</label><textarea class="form-control form-control-sm" name="comentario" rows="2" placeholder="Ej. Requiere corte de tensión, disponibilidad de iluminación, etc.">{{ r[21] if r[21] else '' }}</textarea></div>
+                        <div class="mb-2"><label class="form-label-l2">Comentario del Permiso</label><textarea class="form-control form-control-sm" name="comentario" rows="2" placeholder="Ej. Requiere corte de tensión, disponibilidad de iluminación, etc.">{{ r[20] if r[20] else '' }}</textarea></div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>

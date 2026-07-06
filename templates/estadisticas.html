@@ -105,6 +105,17 @@
         </div>
     </div>
 
+    {% if total_reg == 0 %}
+    <div class="alert alert-warning fw-bold text-center mb-3" style="border-left:4px solid var(--ml-yellow);">
+        ℹ️ No se encontraron trabajos con los filtros aplicados.
+        {% if fecha_inicio or fecha_fin or turno_filtro %}
+        Prueba con otro rango de fechas u otro turno.
+        {% else %}
+        La base de datos aun no tiene registros.
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- TARJETAS -->
     <div class="row g-3 mb-4">
         <div class="col-md-2 col-sm-6">
@@ -151,7 +162,14 @@
     <div class="row g-3 mb-3">
         <div class="col-12">
             <div class="card card-pco">
-                <div class="card-header bg-ml-blue">📈 Trabajos Ingresados por Día · Turno Día (5-17) vs Noche (17-5)</div>
+                <div class="card-header bg-ml-blue d-flex justify-content-between align-items-center">
+                    <span>📈 Trabajos Ingresados por Día · Turno Día (5-17) vs Noche (17-5)</span>
+                    {% if dias_turno_labels|length == 0 %}
+                    <span class="badge bg-light text-dark">Sin datos para el filtro</span>
+                    {% else %}
+                    <span class="badge bg-light text-dark">{{ dias_turno_labels|length }} día(s)</span>
+                    {% endif %}
+                </div>
                 <div class="card-body">
                     <div class="chart-container" style="height: 340px;">
                         <canvas id="chartPorDiaTurno"></canvas>
