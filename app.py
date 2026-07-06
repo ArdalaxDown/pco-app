@@ -196,8 +196,18 @@ def get_db_connection(max_retries=3, delay=1):
     for i in range(max_retries):
         try:
             if database_url:
-                return psycopg2.connect(database_url, connect_timeout=10)
-            return psycopg2.connect(dbname="pco_db", user="ardalax", host="localhost", port="5432")
+                conn = psycopg2.connect(database_url, connect_timeout=10)
+            else:
+                conn = psycopg2.connect(dbname="pco_db", user="ardalax", host="localhost", port="5432")
+            # Fijar la sesion a hora de Lima para que CURRENT_TIME/CURRENT_DATE
+            # reflejen la fecha/hora local peruana (UTC-5, sin horario de verano).
+            try:
+                cur = conn.cursor()
+                cur.execute("SET TIME ZONE 'America/Lima';")
+                cur.close()
+            except Exception:
+                pass
+            return conn
         except OperationalError as e:
             last_err = e
             if i < max_retries - 1:
@@ -459,8 +469,8 @@ def ingresar():
         # --- SI NO HAY PELIGRO, SE INSERTA NORMAL ---
         cur.execute("""
             INSERT INTO seguimiento_vias 
-            (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'En Vía', %s, %s, %s, %s, %s);
+            (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, fecha, hora_inicio, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, CURRENT_TIME, 'En Vía', %s, %s, %s, %s, %s);
         """, (turno, operador, spco, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario))
         conn.commit()
         cur.close()
@@ -1220,8 +1230,8 @@ def confirmar_importado():
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO seguimiento_vias 
-        (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, hora_inicio, estado, comentario)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, %s, 'En Vía', %s)
+        (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, fecha, hora_inicio, estado, comentario)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, CURRENT_DATE, COALESCE(%s, CURRENT_TIME), 'En Vía', %s)
         RETURNING id;
     """, (turno, operador, spco, empresa, orden_trabajo, responsable, zona, tetra, hora_inicio, comentario))
     new_id = cur.fetchone()[0]
@@ -1467,6 +1477,11 @@ def estadisticas():
         cur.execute(f"SELECT COUNT(*) FROM seguimiento_vias{where_sql};", tuple(params))
         total_archivados = cur.fetchone()[0]
 
+        # 9) Diagnóstico: listar fechas realmente existentes en la BD (sin filtros)
+        #    para ayudar a entender por qué un filtro no trae datos.
+        cur.execute("SELECT fecha, COUNT(*) AS total FROM seguimiento_vias GROUP BY fecha ORDER BY fecha DESC LIMIT 30;")
+        fechas_existentes = [(str(r[0]), int(r[1])) for r in cur.fetchall()]
+
     except (OperationalError, DatabaseError) as e:
         app.logger.error(f"estadisticas DB error: {e}")
         dias_labels, dias_data = [], []
@@ -1479,6 +1494,7 @@ def estadisticas():
         dias_semana_labels, dias_semana_data = [], []
         promedio_duracion_min = 0.0
         zonas_labels, zonas_data = [], []
+        fechas_existentes = []
     finally:
         if cur:
             cur.close()
@@ -1500,6 +1516,7 @@ def estadisticas():
         dias_semana_labels=dias_semana_labels, dias_semana_data=dias_semana_data,
         promedio_duracion_min=promedio_duracion_min,
         zonas_labels=zonas_labels, zonas_data=zonas_data,
+        fechas_existentes=fechas_existentes,
         fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, turno_filtro=turno_filtro)
 
 

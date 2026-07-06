@@ -114,9 +114,23 @@
         La base de datos aun no tiene registros.
         {% endif %}
     </div>
-    {% endif %}
 
-    <!-- TARJETAS -->
+    {% if fechas_existentes %}
+    <div class="card card-pco mb-3" style="border-left:4px solid var(--ml-yellow);">
+        <div class="card-header" style="background:var(--ml-yellow);color:var(--ml-blue);">🔍 Diagnóstico: fechas con trabajos en la BD (sin filtros)</div>
+        <div class="card-body py-2">
+            <p class="small text-muted mb-2">Hay registros en estas fechas. Compara con el filtro que aplicaste:</p>
+            <div class="d-flex flex-wrap gap-1">
+                {% for fecha, total in fechas_existentes %}
+                <span class="badge" style="background:#fff;color:var(--ml-blue);border:1px solid var(--ml-blue);font-size:0.75rem;">
+                    {{ fecha }} · {{ total }}
+                </span>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
     <div class="row g-3 mb-4">
         <div class="col-md-2 col-sm-6">
             <div class="stat-card">
