@@ -115,17 +115,36 @@
         {% endif %}
     </div>
 
-    {% if fechas_existentes %}
+    {% if total_sin_filtro > 0 %}
     <div class="card card-pco mb-3" style="border-left:4px solid var(--ml-yellow);">
-        <div class="card-header" style="background:var(--ml-yellow);color:var(--ml-blue);">🔍 Diagnóstico: fechas con trabajos en la BD (sin filtros)</div>
+        <div class="card-header" style="background:var(--ml-yellow);color:var(--ml-blue);">🔍 Diagnóstico: ¿por qué no se ven los trabajos?</div>
         <div class="card-body py-2">
-            <p class="small text-muted mb-2">Hay registros en estas fechas. Compara con el filtro que aplicaste:</p>
-            <div class="d-flex flex-wrap gap-1">
+            <p class="small text-muted mb-2">
+                La BD tiene <strong>{{ total_sin_filtro }}</strong> registros en total (sin filtros),
+                pero con el filtro actual (fecha_inicio: <code>{{ fecha_inicio or '—' }}</code>,
+                fecha_fin: <code>{{ fecha_fin or '—' }}</code>, turno: <code>{{ turno_filtro or 'ambos' }}</code>)
+                se obtienen <strong>0</strong>.
+            </p>
+            <p class="small text-muted mb-2">Fechas realmente disponibles:</p>
+            <div class="d-flex flex-wrap gap-1 mb-2">
+                {% if fechas_existentes %}
                 {% for fecha, total in fechas_existentes %}
                 <span class="badge" style="background:#fff;color:var(--ml-blue);border:1px solid var(--ml-blue);font-size:0.75rem;">
                     {{ fecha }} · {{ total }}
                 </span>
                 {% endfor %}
+                {% else %}
+                <span class="text-muted fst-italic">— sin fechas —</span>
+                {% endif %}
+            </div>
+            <div class="small text-muted">
+                Comprobaciones a hacer:
+                <ul class="mb-0">
+                    <li>El formato de fecha debe ser <code>AAAA-MM-DD</code> (ej: 2026-07-06).</li>
+                    <li>Si filtras por turno <strong>Día</strong>, solo aparecerán los registros con hora_inicio entre las 05:00 y 17:00.</li>
+                    <li>Si filtras por turno <strong>Noche</strong>, aparecerán los registros iniciados entre 17:00 y 05:00 del día siguiente.</li>
+                    <li>Los registros antiguos (anteriores al fix de fecha/hora Lima) pueden tener <code>hora_inicio</code> NULL y por tanto no caen en ningún turno ==> usa <strong>"Ambos turnos"</strong>.</li>
+                </ul>
             </div>
         </div>
     </div>

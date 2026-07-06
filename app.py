@@ -1474,13 +1474,24 @@ def estadisticas():
         total_reg = sum(estados.values())
         total_dia = bloques['Dia (05-17)']
         total_noche = bloques['Noche (17-05)']
+        # Total de registros que cumplen el filtro (incluye cualquier estado, no solo En Vía + Liberado)
         cur.execute(f"SELECT COUNT(*) FROM seguimiento_vias{where_sql};", tuple(params))
-        total_archivados = cur.fetchone()[0]
+        total_filtrado = cur.fetchone()[0] or 0
+        total_archivados = total_filtrado
+
+        # Si total_reg (suma de En Vía + Liberado) es menor que total_filtrado,
+        # hay estados distintos => ajustamos para no perder realidad en el alert
+        if total_filtrado > total_reg:
+            total_reg = total_filtrado
 
         # 9) Diagnóstico: listar fechas realmente existentes en la BD (sin filtros)
         #    para ayudar a entender por qué un filtro no trae datos.
         cur.execute("SELECT fecha, COUNT(*) AS total FROM seguimiento_vias GROUP BY fecha ORDER BY fecha DESC LIMIT 30;")
         fechas_existentes = [(str(r[0]), int(r[1])) for r in cur.fetchall()]
+
+        # 10) Diagnóstico: ¿cuántos registros hay SIN aplicar ningún filtro?
+        cur.execute("SELECT COUNT(*) FROM seguimiento_vias;")
+        total_sin_filtro = cur.fetchone()[0] or 0
 
     except (OperationalError, DatabaseError) as e:
         app.logger.error(f"estadisticas DB error: {e}")
@@ -1495,6 +1506,7 @@ def estadisticas():
         promedio_duracion_min = 0.0
         zonas_labels, zonas_data = [], []
         fechas_existentes = []
+        total_sin_filtro = 0
     finally:
         if cur:
             cur.close()
@@ -1517,6 +1529,7 @@ def estadisticas():
         promedio_duracion_min=promedio_duracion_min,
         zonas_labels=zonas_labels, zonas_data=zonas_data,
         fechas_existentes=fechas_existentes,
+        total_sin_filtro=total_sin_filtro,
         fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, turno_filtro=turno_filtro)
 
 
