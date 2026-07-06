@@ -1135,5 +1135,100 @@ def revertir_importado(id):
     return jsonify({'success': True, 'item': item})
 
 
+# ==========================================================================
+# ADMIN: Panel oculto protegido por PIN
+# ==========================================================================
+ADMIN_PIN = os.environ.get("ADMIN_PIN", "pco-admin-local-dev")  # PIN por entorno en Render
+
+def admin_verificar_pin(pin):
+    """Compara PIN con el configurado en variables de entorno."""
+    if not pin:
+        return False
+    return pin.strip() == ADMIN_PIN
+
+
+@app.route('/admin')
+def admin_panel():
+    """Panel admin: muestra TODOS los registros historicos (no solo hoy).
+    Requiere PIN via query (?pin=XXX) o via session['admin_pin_ok'].
+    Si no hay PIN o es incorrecto, devuelve 404 (página no encontrada)
+    para no revelar la existencia de la ruta."""
+    pin = request.args.get('pin', '').strip()
+    pin_session = session.get('admin_pin_ok', False)
+
+    if not pin and not pin_session:
+        # Sin PIN -> devuelve 404 para aparentar que la pagina no existe
+        return render_template('admin.html', autorizado=False), 404
+    if pin and not admin_verificar_pin(pin):
+        # PIN incorrecto -> 404 (no revelar)
+        return render_template('admin.html', autorizado=False), 404
+    if pin and admin_verificar_pin(pin):
+        # PIN correcto -> guardar autorizacion en sesion para futuras visitas
+        session['admin_pin_ok'] = True
+        session['admin_pin_valor'] = pin
+
+    # Cargar TODOS los registros
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona,
+                   num_personas, tetra, hora_inicio, hora_fin, estado,
+                   usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo,
+                   operador_turno, spco_turno, archivado
+            FROM seguimiento_vias
+            ORDER BY fecha DESC, id DESC;
+        """, )
+        registros = cur.fetchall()
+    except (OperationalError, DatabaseError) as e:
+        app.logger.error(f"admin_panel DB error: {e}")
+        registros = []
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+    return render_template('admin.html', autorizado=True, registros=registros)
+
+
+@app.route('/admin/logout')
+def admin_logout():
+    session.pop('admin_pin_ok', None)
+    session.pop('admin_pin_valor', None)
+    return jsonify({'success': True})
+
+
+@app.route('/admin/eliminar/<int:id>', methods=['POST'])
+def admin_eliminar(id):
+    # Verificar autorizacion en sesion primero
+    if not session.get('admin_pin_ok'):
+        # Permitir override con PIN en el body (por si caduca la sesion)
+        data = request.get_json(silent=True) or {}
+        pin = (data.get('pin') or '').strip()
+        if not admin_verificar_pin(pin):
+            return jsonify({'error': 'No autorizado'}), 403
+
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM seguimiento_vias WHERE id = %s;", (id,))
+        conn.commit()
+    except (OperationalError, DatabaseError) as e:
+        app.logger.error(f"admin_eliminar DB error: {e}")
+        return jsonify({'error': 'Error de base de datos'}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+    return jsonify({'success': True, 'id': id})
+
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

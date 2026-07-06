@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCO L2 · Panel de Administración</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        :root {
+            --ml-blue: #1B3A6B;
+            --ml-blue-dark: #142A50;
+            --ml-red: #E30613;
+            --ml-yellow: #FFC72C;
+            --ml-cyan: #00A0DC;
+            --ml-dark: #212529;
+        }
+        html, body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        body { background: #F4F6F9; }
+        .navbar-admin {
+            background: linear-gradient(135deg, var(--ml-dark) 0%, var(--ml-blue-dark) 100%);
+            border-bottom: 4px solid var(--ml-red);
+            padding: 0.6rem 1rem;
+            color: #fff;
+        }
+        .btn-pin { background: var(--ml-red); color: #fff; border: none; font-weight: 600; }
+        .btn-pin:hover { background: #B50510; color: #fff; }
+        .admin-table { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .admin-table th { background: var(--ml-dark); color: #fff; font-size: 0.72rem; letter-spacing: 0.3px; padding: 0.5rem; text-align: center; white-space: nowrap; }
+        .admin-table td { font-size: 0.78rem; padding: 0.4rem 0.5rem; vertical-align: middle; }
+        .admin-table tr:hover { background: #fdecea !important; }
+        .estado-en-via { color: #fff; background: var(--ml-cyan); padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; }
+        .estado-liberado { color: #fff; background: #28a745; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; }
+        .archivado-badge { background: #6c757d; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; }
+        .btn-eliminar-admin { background: var(--ml-red); color: #fff; border: none; padding: 3px 10px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+        .btn-eliminar-admin:hover { background: #B50510; }
+        .usra-hidden { display: none; }
+        .stats-card { background: #fff; border-left: 4px solid var(--ml-red); }
+        .pin-modal input { letter-spacing: 4px; font-family: monospace; text-align: center; }
+        .footer-admin { font-size: 0.7rem; color: #6c757d; padding: 1rem 0; text-align: center; }
+    </style>
+</head>
+<body>
+
+{% if not autorizado %}
+<!-- ============================================================ -->
+<!-- VISTA NO AUTORIZADA: devuelve 404 al navegador pero permite  -->
+<!-- que el usuario trate de ingresar PIN via input embebido.     -->
+<!-- El navegador no muestra el 404 visual porque tenemos body.    -->
+<!-- ============================================================ -->
+<div class="container" style="max-width: 360px; margin-top: 12vh;">
+    <div class="card shadow-sm" style="border: 2px solid var(--ml-dark);">
+        <div class="card-header text-white" style="background: var(--ml-dark);">
+            <span class="fw-bold">🔒 Acceso restringido</span>
+        </div>
+        <div class="card-body py-4">
+            <p class="text-muted small text-center mb-3">Ingresa el código de administrador:</p>
+            <input type="password" id="pinInput" class="form-control form-control-lg text-center pin-modal-input mb-3" maxlength="32" placeholder="••••••••" autofocus style="letter-spacing: 4px; font-family: monospace;">
+            <button class="btn btn-pin w-100 btn-lg" onclick="validarPin()">Acceder</button>
+            <p class="text-muted text-center small mt-3 mb-0"><a href="/" style="text-decoration:none;color:#6c757d;">← Volver a PCO</a></p>
+        </div>
+    </div>
+</div>
+<script>
+    document.getElementById('pinInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') validarPin();
+    });
+    function validarPin() {
+        const pin = document.getElementById('pinInput').value.trim();
+        if (!pin) return;
+        // Redirige con el PIN en query. El backend verificara y guardara en sesion.
+        window.location.href = '/admin?pin=' + encodeURIComponent(pin);
+    }
+</script>
+{% else %}
+<!-- ============================================================ -->
+<!-- PANEL ADMIN AUTORIZADO                                       -->
+<!-- ============================================================ -->
+<nav class="navbar-admin d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-danger">ADMIN</span>
+        <span class="fw-bold">PCO L2 · Panel de Administración</span>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/" class="btn btn-sm btn-outline-light">← PCO</a>
+        <a href="/historial" class="btn btn-sm btn-outline-light">Historial</a>
+        <button class="btn btn-sm btn-outline-light" onclick="cerrarSesion()">🚪 Salir</button>
+    </div>
+</nav>
+
+<div class="container-fluid py-3">
+    <!-- Stats -->
+    <div class="row mb-3 g-2">
+        <div class="col-md-3">
+            <div class="stats-card card p-2">
+                <small class="text-muted">Total registros</small>
+                <strong class="fs-5">{{ registros|length }}</strong>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card card p-2" style="border-left-color: var(--ml-cyan);">
+                <small class="text-muted">En Vía (activos)</small>
+                <strong class="fs-5" style="color: var(--ml-cyan);">{% for r in registros if r[11] == 'En Vía' %}{% if loop.last %}{{ loop.index }}{% endif %}{% endfor %}</strong>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card card p-2" style="border-left-color: #28a745;">
+                <small class="text-muted">Liberados</small>
+                <strong class="fs-5" style="color: #28a745;">{% for r in registros if r[11] == 'Liberado' %}{% if loop.last %}{{ loop.index }}{% endif %}{% endfor %}</strong>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stats-card card p-2" style="border-left-color: #6c757d;">
+                <small class="text-muted">Archivados</small>
+                <strong class="fs-5" style="color: #6c757d;">{% for r in registros if r[19] %}{% if loop.last %}{{ loop.index }}{% endif %}{% endfor %}</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Buscador -->
+    <div class="row mb-2">
+        <div class="col-md-6">
+            <input type="text" id="buscarAdmin" class="form-control form-control-sm" placeholder="🔍 Buscar por empresa, responsable, OT, zona...">
+        </div>
+        <div class="col-md-6 d-flex justify-content-end align-items-center gap-2">
+            <small class="text-muted">Filtrar estado:</small>
+            <select id="filtroEstado" class="form-select form-select-sm" style="width: auto;">
+                <option value="">Todos</option>
+                <option value="En Vía">En Vía</option>
+                <option value="Liberado">Liberado</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+        <table class="table table-sm admin-table mb-0" id="tablaAdmin">
+            <thead style="position: sticky; top: 0; z-index: 1;">
+                <tr>
+                    <th>ID</th>
+                    <th>Fecha</th>
+                    <th>Turno</th>
+                    <th>Empresa</th>
+                    <th>Ord. Trabajo</th>
+                    <th>Responsable</th>
+                    <th>Zona</th>
+                    <th>Hr. Inicio</th>
+                    <th>Hr. Fin</th>
+                    <th>Estado</th>
+                    <th>Operador</th>
+                    <th>SPCO</th>
+                    <th>Archivado</th>
+                    <th>Acción</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in registros %}
+                <tr data-estado="{{ r[11] }}" data-buscar="{{ (r[3] ~ ' ' ~ r[5] ~ ' ' ~ r[7] ~ ' ' ~ r[6])|upper }}">
+                    <td>{{ r[0] }}</td>
+                    <td>{{ r[1] }}</td>
+                    <td>{{ r[2] }}</td>
+                    <td>{{ r[3] }}</td>
+                    <td>{{ r[4] }}</td>
+                    <td>{{ r[5] }}</td>
+                    <td>{{ r[6] }}</td>
+                    <td>{{ r[9] }}</td>
+                    <td>{{ r[10] }}</td>
+                    <td>
+                        {% if r[11] == 'En Vía' %}<span class="estado-en-via">En Vía</span>
+                        {% else %}<span class="estado-liberado">Liberado</span>{% endif %}
+                    </td>
+                    <td>{{ r[16] }}</td>
+                    <td>{{ r[17] }}</td>
+                    <td>{% if r[19] %}<span class="archivado-badge">Sí</span>{% else %}No{% endif %}</td>
+                    <td>
+                        <button class="btn-eliminar-admin" onclick="eliminarRegistro({{ r[0] }}, this)">🗑️ Borrar</button>
+                    </td>
+                </tr>
+                {% endfor %}
+                {% if not registros %}
+                <tr><td colspan="14" class="text-center text-muted py-4">No hay registros en el historial.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="footer-admin">
+        ⚠️ El borrado es <strong>permanente</strong>. Cualquier eliminación es irreversible. Verifica el ID antes de confirmar.
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Buscador
+    const inputBuscar = document.getElementById('buscarAdmin');
+    const filtroEstado = document.getElementById('filtroEstado');
+    function aplicarFiltros() {
+        const q = inputBuscar.value.trim().toUpperCase();
+        const estado = filtroEstado.value;
+        document.querySelectorAll('#tablaAdmin tbody tr').forEach(tr => {
+            const texto = tr.getAttribute('data-buscar') || '';
+            const est = tr.getAttribute('data-estado') || '';
+            const matchTexto = !q || texto.includes(q);
+            const matchEstado = !estado || est === estado;
+            tr.style.display = (matchTexto && matchEstado) ? '' : 'none';
+        });
+    }
+    inputBuscar.addEventListener('input', aplicarFiltros);
+    filtroEstado.addEventListener('change', aplicarFiltros);
+
+    // Eliminar registro
+    function eliminarRegistro(id, btn) {
+        if (!confirm('¿Eliminar permanentemente el registro ID ' + id + '? Esta acción NO se puede deshacer.')) return;
+        btn.disabled = true;
+        btn.innerHTML = '⏳...';
+
+        fetch('/admin/eliminar/' + id, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({})
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 200 && body.success) {
+                const fila = btn.closest('tr');
+                fila.style.background = '#f8d7da';
+                fila.style.transition = 'opacity 0.4s';
+                setTimeout(() => fila.remove(), 300);
+                // Actualizar contadores visibles
+                const span = document.querySelector('.footer-admin');
+                if (span) span.insertAdjacentHTML('afterbegin', '✅ Registro ' + id + ' eliminado. ');
+            } else {
+                alert('Error: ' + (body.error || 'No se pudo eliminar'));
+                btn.disabled = false;
+                btn.innerHTML = '🗑️ Borrar';
+            }
+        })
+        .catch(err => {
+            alert('Error de red: ' + err.message);
+            btn.disabled = false;
+            btn.innerHTML = '🗑️ Borrar';
+        });
+    }
+
+    // Cerrar sesion admin limpia la sesion del backend
+    function cerrarSesion() {
+        fetch('/admin/logout').then(() => { window.location.href = '/'; }).catch(() => { window.location.href = '/'; });
+    }
+</script>
+{% endif %}
+
+</body>
+</html>

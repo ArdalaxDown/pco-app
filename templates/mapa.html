@@ -181,5 +181,10 @@
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
         const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
     </script>
+
+    <!-- Footer discreto - acceso admin -->
+    <div style="position:fixed;bottom:4px;left:6px;z-index:1000;opacity:0.18;transition:opacity 0.3s;" onmouseover="this.style.opacity='0.55'" onmouseout="this.style.opacity='0.18'">
+        <a href="/admin" title="" style="text-decoration:none;color:#6c757d;font-size:9px;letter-spacing:0.5px;">·</a>
+    </div>
 </body>
 </html>
