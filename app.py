@@ -5,6 +5,8 @@ from datetime import datetime, date, time
 import openpyxl
 import re
 import os
+import csv
+import io as _stdio_io
 import time as _time
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import io
@@ -881,6 +883,84 @@ def importar_excel():
     session['importados_pendientes'] = prev
 
     return jsonify({'datos': datos})
+
+
+@app.route('/importar_texto', methods=['POST'])
+def importar_texto():
+    """Importa trabajos pegados como texto TSV (mismo formato que el Excel original).
+    Acepta tabuladores o múltiples espacios como separador.
+    Filtra igual que el Excel: solo filas CONFIRMADA + ACCESO=SI."""
+    data = request.get_json(silent=True) or {}
+    texto = (data.get('texto') or '').strip()
+    if not texto:
+        return jsonify({'error': 'No se recibió texto'}), 400
+
+    # Normalizar separadores: tabs -> tab único; detectar si viene del Excel (tab)
+    # Si no hay tabs, asumimos que son múltiples espacios y los convertimos a tabs
+    if '\t' not in texto and '  ' in texto:
+        # 2+ espacios seguidos -> un tab (preserva espacios simples dentro de comillas)
+        texto = re.sub(r' {2,}', '\t', texto)
+
+    lineas = [ln for ln in texto.split('\n') if ln.strip()]
+    if not lineas:
+        return jsonify({'error': 'Texto vacío'}), 400
+
+    # Leer con csv dialect excel-tab (maneja comillas correctamente)
+    reader = csv.reader(_stdio_io.StringIO(texto), dialect='excel-tab', skipinitialspace=False)
+
+    datos = []
+    for fila in reader:
+        if not fila or len(fila) < 5:
+            continue
+        # Igual que el Excel, fila 6+ son datos; el header de columnas llega a veces
+        # Si una fila tiene texto "N°" o "NRO" en col 0, la saltamos
+        col0 = (fila[0] or '').strip().upper()
+        if col0 in ('N°', 'NRO', 'N.', 'N', 'ITEM', '#'):
+            continue
+
+        # Mapeo del texto pegado (TSV con cabecera del reporte original):
+        # col1=estado, col2=spco, col4=operador, col7=orden_trabajo,
+        # col10=empresa, col13=acceso_via (SI), col16=desde, col17=hasta,
+        # col19=responsable/nombres, col20=celulares_tetra
+        estado = (fila[1] if len(fila) > 1 else '') or ''
+        acceso = (fila[13] if len(fila) > 13 else '') or ''
+
+        if str(estado).strip().upper() != 'CONFIRMADA':
+            continue
+        if str(acceso).strip().upper() != 'SI':
+            continue
+
+        spco = (fila[2] if len(fila) > 2 else '') or ''
+        operador = (fila[4] if len(fila) > 4 else '') or ''
+        orden_trabajo = (fila[7] if len(fila) > 7 else '') or ''
+        empresa = (fila[10] if len(fila) > 10 else '') or ''
+        desde = (fila[16] if len(fila) > 16 else '') or ''
+        hasta = (fila[17] if len(fila) > 17 else '') or ''
+        responsable = (fila[19] if len(fila) > 19 else '') or ''
+        celular_tetra = (fila[20] if len(fila) > 20 else '') or ''
+
+        tetra = extract_tetra(celular_tetra)
+
+        datos.append({
+            'spco': str(spco).strip(),
+            'operador': str(operador).strip(),
+            'desde': str(desde).strip(),
+            'hasta': str(hasta).strip(),
+            'responsable': str(responsable).strip(),
+            'tetra': tetra,
+            'orden_trabajo': str(orden_trabajo).strip(),
+            'empresa': str(empresa).strip(),
+        })
+
+    if not datos:
+        return jsonify({'error': 'No se encontraron filas CONFIRMADAS con ACCESO=SI en el texto pegado'}), 400
+
+    # Guardar en sesión (igual que importar_excel)
+    prev = session.get('importados_pendientes', [])
+    prev.extend(datos)
+    session['importados_pendientes'] = prev
+
+    return jsonify({'datos': datos, 'total': len(datos)})
 
 
 @app.route('/confirmar_importado', methods=['POST'])

@@ -130,9 +130,31 @@
             <a href="/historial" class="nav-btn">🔍 Historial</a>
             <a href="/exportar" class="nav-btn primary">📥 Reporte Excel</a>
             <button class="nav-btn cyan" onclick="document.getElementById('excelFileInput').click()">📂 Importar</button>
+            <button class="nav-btn cyan" onclick="abrirModalTexto()">📝 Importar Texto</button>
         </div>
         <input type="file" id="excelFileInput" accept=".xlsx" style="display:none;">
     </nav>
+
+    <!-- ====== MODAL IMPORTAR TEXTO ====== -->
+    <div class="modal fade" id="modalImportarTexto" tabindex="-1" aria-labelledby="modalImportarTextoLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content" style="border:2px solid var(--ml-blue);">
+                <div class="modal-header bg-ml-blue text-white">
+                    <h5 class="modal-title fw-bold" id="modalImportarTextoLabel">📝 Importar Trabajos desde Texto</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="small text-muted">Pega aquí el texto copiado del reporte (con tabulaciones o columnas separadas por 2+ espacios). Se filtrarán automáticamente las filas con estado <strong>CONFIRMADA</strong> y <strong>ACCESO A VÍA = SI</strong>, igual que al importar Excel.</p>
+                    <textarea id="textoPegado" class="form-control" rows="10" placeholder="Pega aquí el texto copiado...&#10;&#10;Ejemplo:&#10;4	CONFIRMADA	M. ZAPATA	9:44 a.m.	G. DÍAZ			SPV-SEM28-2026-278	07:00	22:00	EPC-HR	Actividades...	si	SI	NO	Nave Taller PTSA	PTSA	..." style="font-family: monospace; font-size: 0.78rem;"></textarea>
+                    <div id="textoImportFeedback" class="mt-2"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-ml-cyan text-white fw-bold" onclick="procesarTextoPegado()">📋 Procesar Texto</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <div class="container-fluid py-3">
 
@@ -556,6 +578,65 @@
             })
             .catch(err => {
                 alert('Error al procesar: ' + err.message);
+            });
+        }
+
+        // ====== IMPORTAR TEXTO PEGADO ======
+        let modalImportarTextoInstancia = null;
+        function abrirModalTexto() {
+            const modalEl = document.getElementById('modalImportarTexto');
+            if (!modalEl) return;
+            if (!modalImportarTextoInstancia) {
+                modalImportarTextoInstancia = new bootstrap.Modal(modalEl);
+            }
+            document.getElementById('textoPegado').value = '';
+            document.getElementById('textoImportFeedback').innerHTML = '';
+            modalImportarTextoInstancia.show();
+        }
+
+        function procesarTextoPegado() {
+            const textarea = document.getElementById('textoPegado');
+            const feedback = document.getElementById('textoImportFeedback');
+            const texto = textarea.value.trim();
+
+            if (!texto) {
+                feedback.innerHTML = '<div class="alert alert-warning py-2 small mb-0">⚠️ Pega texto antes de procesar.</div>';
+                return;
+            }
+
+            feedback.innerHTML = '<div class="alert alert-info py-2 small mb-0">⏳ Procesando...</div>';
+            const btn = event.target;
+            const btnOriginal = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Procesando...';
+
+            fetch('/importar_texto', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ texto: texto })
+            })
+            .then(response => {
+                if (!response.ok) return response.json().then(e => { throw new Error(e.error || 'Error del servidor'); });
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    feedback.innerHTML = '<div class="alert alert-danger py-2 small mb-0">❌ ' + data.error + '</div>';
+                    btn.disabled = false;
+                    btn.innerHTML = btnOriginal;
+                    return;
+                }
+                const total = data.total || (data.datos ? data.datos.length : 0);
+                feedback.innerHTML = '<div class="alert alert-success py-2 small mb-0">✅ Se importaron <strong>' + total + '</strong> trabajo(s) pendientes. Recargando...</div>';
+                setTimeout(function() {
+                    if (modalImportarTextoInstancia) modalImportarTextoInstancia.hide();
+                    location.reload();
+                }, 1200);
+            })
+            .catch(err => {
+                feedback.innerHTML = '<div class="alert alert-danger py-2 small mb-0">❌ ' + err.message + '</div>';
+                btn.disabled = false;
+                btn.innerHTML = btnOriginal;
             });
         }
 
