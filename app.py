@@ -1,9 +1,11 @@
 from flask import Flask, flash, render_template, request, redirect, url_for, send_file, session, jsonify
 import psycopg2
+from psycopg2 import OperationalError, DatabaseError
 from datetime import datetime, date, time
 import openpyxl
 import re
 import os
+import time as _time
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 import io
 
@@ -186,11 +188,20 @@ def get_zonas_con_info(ubicacion_zona_str):
         })
     return resultado
 
-def get_db_connection():
+def get_db_connection(max_retries=3, delay=1):
     database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        return psycopg2.connect(database_url)
-    return psycopg2.connect(dbname="pco_db", user="ardalax", host="localhost", port="5432")
+    last_err = None
+    for i in range(max_retries):
+        try:
+            if database_url:
+                return psycopg2.connect(database_url, connect_timeout=10)
+            return psycopg2.connect(dbname="pco_db", user="ardalax", host="localhost", port="5432")
+        except OperationalError as e:
+            last_err = e
+            if i < max_retries - 1:
+                _time.sleep(delay * (i + 1))
+            continue
+    raise last_err
 
 
 def normalizar_zonas(zonas):
@@ -458,32 +469,68 @@ def ingresar():
     
 @app.route('/liberar/<int:id>')
 def liberar(id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE seguimiento_vias SET hora_fin = CURRENT_TIME, estado = 'Liberado' WHERE id = %s;", (id,))
-    conn.commit()
-    cur.close()
-    conn.close()
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE seguimiento_vias SET hora_fin = CURRENT_TIME, estado = 'Liberado' WHERE id = %s;", (id,))
+        conn.commit()
+        flash('Registro liberado correctamente.', 'success')
+    except (OperationalError, DatabaseError) as e:
+        flash('Error de base de datos al liberar. Intenta de nuevo.', 'danger')
+        app.logger.error(f"liberar DB error: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
     return redirect(url_for('index'))
 
 @app.route('/revertir/<int:id>')
 def revertir(id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("UPDATE seguimiento_vias SET hora_fin = NULL, estado = 'En Vía' WHERE id = %s;", (id,))
-    conn.commit()
-    cur.close()
-    conn.close()
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE seguimiento_vias SET hora_fin = NULL, estado = 'En Vía' WHERE id = %s;", (id,))
+        conn.commit()
+        flash('Registro revertido correctamente.', 'success')
+    except (OperationalError, DatabaseError) as e:
+        flash('Error de base de datos al revertir. Intenta de nuevo.', 'danger')
+        app.logger.error(f"revertir DB error: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
     return redirect(url_for('index'))
 
 @app.route('/eliminar/<int:id>')
 def eliminar(id):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("DELETE FROM seguimiento_vias WHERE id = %s;", (id,))
-    conn.commit()
-    cur.close()
-    conn.close()
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("DELETE FROM seguimiento_vias WHERE id = %s;", (id,))
+        conn.commit()
+        flash('Registro eliminado correctamente.', 'success')
+    except (OperationalError, DatabaseError) as e:
+        flash('Error de base de datos al eliminar. Intenta de nuevo.', 'danger')
+        app.logger.error(f"eliminar DB error: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
     return redirect(url_for('index'))
 
 @app.route('/editar/<int:id>', methods=['POST'])
@@ -507,18 +554,30 @@ def editar(id):
         hora_fin = datetime.strptime(h_fin_str, "%H:%M:%S").time() if h_fin_str else None
         estado = 'Liberado' if hora_fin else 'En Vía'
 
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            UPDATE seguimiento_vias 
-            SET empresa = %s, orden_trabajo = %s, responsable = %s, ubicacion_zona = %s, num_personas = %s, 
-                tetra = %s, hora_inicio = %s, hora_fin = %s, estado = %s,
-                usa_vehiculo = %s, tipo_vehiculo = %s, codigo_vehiculo = %s, conductor_vehiculo = %s
-            WHERE id = %s;
-        """, (empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, hora_inicio, hora_fin, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, id))
-        conn.commit()
-        cur.close()
-        conn.close()
+        conn = None
+        cur = None
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE seguimiento_vias 
+                SET empresa = %s, orden_trabajo = %s, responsable = %s, ubicacion_zona = %s, num_personas = %s, 
+                    tetra = %s, hora_inicio = %s, hora_fin = %s, estado = %s,
+                    usa_vehiculo = %s, tipo_vehiculo = %s, codigo_vehiculo = %s, conductor_vehiculo = %s
+                WHERE id = %s;
+            """, (empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, hora_inicio, hora_fin, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, id))
+            conn.commit()
+            flash('Registro actualizado correctamente.', 'success')
+        except (OperationalError, DatabaseError) as e:
+            flash('Error de base de datos al actualizar. Intenta de nuevo.', 'danger')
+            app.logger.error(f"editar DB error: {e}")
+            if conn:
+                conn.rollback()
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
         return redirect(url_for('index'))
 
 @app.route('/exportar')
