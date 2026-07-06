@@ -1303,215 +1303,209 @@ def admin_verificar_pin(pin):
     return pin.strip() == ADMIN_PIN
 
 
+def _clasificar_bloque(hora_inicio):
+    """Devuelve 'dia', 'noche', o 'sin_hora' segun el objeto time recibido."""
+    if hora_inicio is None:
+        return 'sin_hora'
+    try:
+        h = hora_inicio
+        # 05:00 inclusive -> 17:00 exclusive = dia
+        from datetime import time as _time
+        if h >= _time(5, 0) and h < _time(17, 0):
+            return 'dia'
+        return 'noche'
+    except Exception:
+        return 'sin_hora'
+
+
 @app.route('/estadisticas')
 def estadisticas():
-    """Dashboard de estadisticas del historial.
-    Calcula trabajos por dia, turno (dia/noche), top empresas/responsables,
-    ratio liberados vs en via. Compatible con Chart.js (sin libs extra).
+    """Dashboard de estadisticas construido a partir de los registros ya
+    almacenados (los mismos que ve el Historial), agregados en Python.
 
-    Acepta filtros opcionales por query string:
+    Se hace UNA sola consulta SQL (identica en filtros a la del historial)
+    y todos los conteos se calculan en Python. As evitamos problemas por
+    casts de tipo time, NULLs, etc. que hacian que SQL perdiera algunos rows.
+
+    Filtros aceptados (mismos nombres que el historial, para reenviarlos):
       - fecha_inicio / fecha_fin (rango de fechas)
-      - turno: 'dia' (5-17), 'noche' (17-5) o '' (ambos)
+      - turno: 'dia' (5-17), 'noche' (17-5), o '' (ambos)
     """
     fecha_inicio = request.args.get('fecha_inicio', '')
     fecha_fin = request.args.get('fecha_fin', '')
     turno_filtro = request.args.get('turno', '')
 
-    # Construir cláusulas WHERE dinámicas
+    # Construccion del WHERE identica en esencia al historial (sin bloque_horario,
+    # porque aqui usamos el 'turno' simplificado a dia/noche/ambos).
     where_clauses = []
     params = []
     if fecha_inicio:
-        where_clauses.append("fecha >= %s")
-        params.append(fecha_inicio)
+        where_clauses.append("fecha >= %s"); params.append(fecha_inicio)
     if fecha_fin:
-        where_clauses.append("fecha <= %s")
-        params.append(fecha_fin)
-    # Filtro por turno según hora_inicio
+        where_clauses.append("fecha <= %s"); params.append(fecha_fin)
     if turno_filtro == 'dia':
-        where_clauses.append("hora_inicio IS NOT NULL AND hora_inicio::time >= '05:00'::time AND hora_inicio::time < '17:00'::time")
+        # Rango simple dentro del mismo dia: 05:00 a 17:00 (igual que historial bloque_horario=dia)
+        where_clauses.append("hora_inicio >= '05:00'::time AND hora_inicio <= '17:00'::time")
     elif turno_filtro == 'noche':
-        where_clauses.append("hora_inicio IS NOT NULL AND (hora_inicio::time >= '17:00'::time OR hora_inicio::time < '05:00'::time)")
+        # Rango que cruza medianoche: 17:00 a 05:00 (igual que historial bloque_horario=noche)
+        where_clauses.append("(hora_inicio >= '17:00'::time OR hora_inicio <= '05:00'::time)")
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
-    # Helper: produces the WHERE clause for SQL, optionally appending extra conditions
-    def build_where(extra_conds=None, extra_params=None):
-        conds = list(where_clauses)
-        ps = list(params)
-        if extra_conds:
-            conds.extend(extra_conds)
-        if extra_params:
-            ps.extend(extra_params)
-        if not conds:
-            return "", tuple(ps)
-        return (" WHERE " + " AND ".join(conds)), tuple(ps)
+    # Acumuladores en Python
+    total_reg = 0
+    dias_turno_labels = []; dias_dia_data = []; dias_noche_data = []
+    dias_labels = []; dias_data = []
+    bloques = {'Dia (05-17)': 0, 'Noche (17-05)': 0, 'Sin hora': 0}
+    empresas_contador = {}
+    respon_contador = {}
+    estados = {'En Vía': 0, 'Liberado': 0}
+    dias_semana_contador = {}
+    zonas_contador = {}
+    duraciones_min = []
+    fechas_existentes = []
+    total_sin_filtro = 0
 
-    where_sql = build_where()[0]
-
-    conn = None
-    cur = None
+    conn = None; cur = None
     try:
         conn = get_db_connection()
         cur = conn.cursor()
 
-        # 1) Trabajos por dia (aplicando filtros)
+        # CONSULTA PRINCIPAL: trae todos los registros que cumplen el filtro
+        # (identico al historial). Indices:
+        # 0 id, 1 fecha, 2 turno, 3 empresa, 4 orden_trabajo, 5 responsable,
+        # 6 ubicacion_zona, 7 num_personas, 8 tetra, 9 hora_inicio, 10 hora_fin,
+        # 11 estado, 12 usa_vehiculo, 13 tipo_vehiculo, 14 codigo_vehiculo,
+        # 15 conductor_vehiculo, 16 operador_turno, 17 spco_turno, 18 comentario
         cur.execute(f"""
-            SELECT fecha, COUNT(*) AS total
+            SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona,
+                   num_personas, tetra, hora_inicio, hora_fin, estado,
+                   usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo,
+                   operador_turno, spco_turno, comentario
             FROM seguimiento_vias{where_sql}
-            GROUP BY fecha
-            ORDER BY fecha ASC;
+            ORDER BY fecha ASC, hora_inicio ASC;
         """, tuple(params))
-        por_dia_raw = cur.fetchall()
-        dias_labels = [str(r[0]) for r in por_dia_raw]
-        dias_data = [int(r[1]) for r in por_dia_raw]
+        registros = cur.fetchall()
 
-        # 1.b) Trabajos por dia DESGLOSADO por turno (dia/noche) - barras apiladas
-        cur.execute(f"""
-            SELECT fecha,
-                   SUM(CASE WHEN hora_inicio IS NOT NULL
-                             AND hora_inicio::time >= '05:00'::time
-                             AND hora_inicio::time < '17:00'::time THEN 1 ELSE 0 END) AS dia,
-                   SUM(CASE WHEN hora_inicio IS NOT NULL
-                             AND (hora_inicio::time >= '17:00'::time
-                                  OR hora_inicio::time < '05:00'::time) THEN 1 ELSE 0 END) AS noche
-            FROM seguimiento_vias{where_sql}
-            GROUP BY fecha
-            ORDER BY fecha ASC;
-        """, tuple(params))
-        por_dia_turno_raw = cur.fetchall()
-        dias_turno_labels = [str(r[0]) for r in por_dia_turno_raw]
-        dias_dia_data = [int(r[1] or 0) for r in por_dia_turno_raw]
-        dias_noche_data = [int(r[2] or 0) for r in por_dia_turno_raw]
+        total_reg = len(registros)
+        # Mapeo dia de la semana
+        semana_map_idx = {'MON':'Lun','TUE':'Mar','WED':'Mié','THU':'Jue','FRI':'Vie','SAT':'Sáb','SUN':'Dom'}
+        orden_semana = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom']
+        # Agregaciones por fecha (preservando orden cronologico)
+        por_dia_acum = {}  # fecha --> {'dia':int,'noche':int,'sin_hora':int,'total':int}
+        for r in registros:
+            fecha = str(r[1]) if r[1] is not None else 'S/F'
+            empresa = (r[3] or '').strip()
+            responsable = (r[5] or '').strip()
+            estado = r[11] or ''
+            ubicacion = (r[6] or '').strip()
+            hora_inicio = r[9]
 
-        # 2) Turno dia vs noche (segun hora_inicio: 05:00-17:00 = dia; resto = noche)
-        cur.execute(f"""
-            SELECT
-                CASE WHEN hora_inicio IS NOT NULL
-                          AND hora_inicio::time >= '05:00'::time
-                          AND hora_inicio::time < '17:00'::time
-                     THEN 'Dia (05-17)' ELSE 'Noche (17-05)' END AS bloque,
-                COUNT(*) AS total
-            FROM seguimiento_vias{where_sql}
-            GROUP BY bloque;
-        """, tuple(params))
-        bloques = {'Dia (05-17)': 0, 'Noche (17-05)': 0}
-        for r in cur.fetchall():
-            bloques[r[0]] = int(r[1])
+            # Bloque dia/noche segun hora_inicio
+            bloque = _clasificar_bloque(hora_inicio)
+            bloque_key = {'dia':'Dia (05-17)', 'noche':'Noche (17-05)', 'sin_hora':'Sin hora'}[bloque]
+            bloques[bloque_key] = bloques.get(bloque_key, 0) + 1
 
-        # 3) Top 5 empresas por cantidad
-        where_emp, params_emp = build_where(["empresa IS NOT NULL", "empresa <> ''"])
-        cur.execute(f"""
-            SELECT empresa, COUNT(*) AS total
-            FROM seguimiento_vias{where_emp}
-            GROUP BY empresa
-            ORDER BY total DESC
-            LIMIT 5;
-        """, params_emp)
-        por_empresa_raw = cur.fetchall()
-        empresas_labels = [r[0] for r in por_empresa_raw]
-        empresas_data = [int(r[1]) for r in por_empresa_raw]
+            # Agregaciones por empresa/responsable/estado/zona
+            if empresa:
+                empresas_contador[empresa] = empresas_contador.get(empresa, 0) + 1
+            if responsable:
+                # Juntar nombres sin normalizar excesivamente: tomamos la primera linea para agrupar mejor
+                resp_clean = responsable.split('\n')[0].strip()
+                if resp_clean:
+                    respon_contador[resp_clean] = respon_contador.get(resp_clean, 0) + 1
+            if estado in estados:
+                estados[estado] += 1
+            else:
+                estados[estado] = estados.get(estado, 0) + 1
+            if ubicacion:
+                # Normalizar zonas agrupando por el primer componente antes de ' -> '
+                zona_clean = ubicacion.split(' -> ')[0].split(',')[0].strip()
+                if zona_clean:
+                    zonas_contador[zona_clean] = zonas_contador.get(zona_clean, 0) + 1
 
-        # 4) Top 5 responsables
-        where_resp, params_resp = build_where(["responsable IS NOT NULL", "responsable <> ''"])
-        cur.execute(f"""
-            SELECT responsable, COUNT(*) AS total
-            FROM seguimiento_vias{where_resp}
-            GROUP BY responsable
-            ORDER BY total DESC
-            LIMIT 5;
-        """, params_resp)
-        por_responsable_raw = cur.fetchall()
-        respon_labels = [r[0] for r in por_responsable_raw]
-        respon_data = [int(r[1]) for r in por_responsable_raw]
+            # Duracion (si inicio y fin presentes)
+            if r[9] is not None and r[10] is not None:
+                try:
+                    # Devuelve minutos
+                    if hasattr(r[10], 'timestamp') and hasattr(r[9], 'timestamp'):
+                        # son time, no datetime; usar differencia manual
+                        pass
+                    # Trabajamos con objetos time; construir datetime dummy
+                    from datetime import datetime as _dt
+                    base = _dt(2000, 1, 1)
+                    hi = r[9]; hf = r[10]
+                    if hasattr(hi, 'hour'):
+                        dt0 = base.replace(hour=hi.hour, minute=hi.minute, second=hi.second or 0)
+                        dt1 = base.replace(hour=hf.hour, minute=hf.minute, second=hf.second or 0)
+                        if dt1 < dt0:
+                            dt1 = dt1.replace(day=base.day + 1)
+                        seconds = (dt1 - dt0).total_seconds()
+                        if seconds > 0:
+                            duraciones_min.append(seconds / 60.0)
+                except Exception:
+                    pass
 
-        # 5) Estado (liberados vs en via)
-        cur.execute(f"""
-            SELECT estado, COUNT(*) FROM seguimiento_vias{where_sql}
-            GROUP BY estado;
-        """, tuple(params))
-        estados = {'En Vía': 0, 'Liberado': 0}
-        for r in cur.fetchall():
-            estados[r[0]] = int(r[1])
+            # Dia de la semana (name en ingles, mapeado a Lun-Dom)
+            if r[1] is not None:
+                try:
+                    dia_en = r[1].strftime('%a').upper()  # ej 'MON'
+                    dia_es = semana_map_idx.get(dia_en, dia_en.title())
+                    dias_semana_contador[dia_es] = dias_semana_contador.get(dia_es, 0) + 1
+                except Exception:
+                    pass
 
-        # 6) Trabajos por día de la semana (Lun..Dom) — útil para mapear histórico
-        cur.execute(f"""
-            SELECT TO_CHAR(fecha, 'DY') AS dia_sem, COUNT(*) AS total
-            FROM seguimiento_vias{where_sql}
-            GROUP BY dia_sem
-            ORDER BY CASE dia_sem
-                WHEN 'MON' THEN 1 WHEN 'TUE' THEN 2 WHEN 'WED' THEN 3
-                WHEN 'THU' THEN 4 WHEN 'FRI' THEN 5 WHEN 'SAT' THEN 6
-                WHEN 'SUN' THEN 7 ELSE 8 END;
-        """, tuple(params))
-        dias_semana_map = {'MON':'Lun','TUE':'Mar','WED':'Mié','THU':'Jue','FRI':'Vie','SAT':'Sáb','SUN':'Dom'}
-        dias_semana_labels = []
-        dias_semana_data = []
-        for r in cur.fetchall():
-            dias_semana_labels.append(dias_semana_map.get(r[0], r[0]))
-            dias_semana_data.append(int(r[1]))
+            # Agregacion por fecha
+            if fecha not in por_dia_acum:
+                por_dia_acum[fecha] = {'dia':0, 'noche':0, 'sin_hora':0, 'total':0}
+            por_dia_acum[fecha]['total'] += 1
+            por_dia_acum[fecha][bloque] += 1
 
-        # 7) Duración promedio en vía (en minutos), solo de trabajos liberados
-        where_dur, params_dur = build_where(["hora_inicio IS NOT NULL", "hora_fin IS NOT NULL"])
-        cur.execute(f"""
-            SELECT AVG(EXTRACT(EPOCH FROM (hora_fin - hora_inicio)) / 60) AS prom_min
-            FROM seguimiento_vias{where_dur}
-        """, params_dur)
-        prom_min_row = cur.fetchone()
-        promedio_duracion_min = float(prom_min_row[0]) if prom_min_row and prom_min_row[0] is not None else 0.0
+        for fecha in sorted(por_dia_acum.keys()):
+            dias_turno_labels.append(fecha)
+            dias_dia_data.append(por_dia_acum[fecha]['dia'])
+            dias_noche_data.append(por_dia_acum[fecha]['noche'] + por_dia_acum[fecha].get('sin_hora', 0))
+            dias_labels.append(fecha)
+            dias_data.append(por_dia_acum[fecha]['total'])
 
-        # 8) Top 5 zonas más trabajadas
-        where_zona, params_zona = build_where(["ubicacion_zona IS NOT NULL", "ubicacion_zona <> ''"])
-        cur.execute(f"""
-            SELECT ubicacion_zona, COUNT(*) AS total
-            FROM seguimiento_vias{where_zona}
-            GROUP BY ubicacion_zona
-            ORDER BY total DESC
-            LIMIT 5;
-        """, params_zona)
-        por_zona_raw = cur.fetchall()
-        zonas_labels = [r[0] for r in por_zona_raw]
-        zonas_data = [int(r[1]) for r in por_zona_raw]
+        # Top 5 empresas
+        empresas_sorted = sorted(empresas_contador.items(), key=lambda x: x[1], reverse=True)[:5]
+        empresas_labels = [e[0] for e in empresas_sorted]
+        empresas_data = [int(e[1]) for e in empresas_sorted]
+
+        # Top 5 responsables
+        respon_sorted = sorted(respon_contador.items(), key=lambda x: x[1], reverse=True)[:5]
+        respon_labels = [e[0] for e in respon_sorted]
+        respon_data = [int(e[1]) for e in respon_sorted]
+
+        # Top 5 zonas
+        zonas_sorted = sorted(zonas_contador.items(), key=lambda x: x[1], reverse=True)[:5]
+        zonas_labels = [e[0] for e in zonas_sorted]
+        zonas_data = [int(e[1]) for e in zonas_sorted]
+
+        # Dia de la semana en orden Lun-Dom
+        dias_semana_labels = [d for d in orden_semana if d in dias_semana_contador]
+        dias_semana_data = [dias_semana_contador.get(d, 0) for d in dias_semana_labels]
 
         # Totales
-        total_reg = sum(estados.values())
         total_dia = bloques['Dia (05-17)']
         total_noche = bloques['Noche (17-05)']
-        # Total de registros que cumplen el filtro (incluye cualquier estado, no solo En Vía + Liberado)
-        cur.execute(f"SELECT COUNT(*) FROM seguimiento_vias{where_sql};", tuple(params))
-        total_filtrado = cur.fetchone()[0] or 0
-        total_archivados = total_filtrado
+        total_archivados = total_reg  # en este contexto, equivalente
+        promedio_duracion_min = (sum(duraciones_min) / len(duraciones_min)) if duraciones_min else 0.0
 
-        # Si total_reg (suma de En Vía + Liberado) es menor que total_filtrado,
-        # hay estados distintos => ajustamos para no perder realidad en el alert
-        if total_filtrado > total_reg:
-            total_reg = total_filtrado
-
-        # 9) Diagnóstico: listar fechas realmente existentes en la BD (sin filtros)
-        #    para ayudar a entender por qué un filtro no trae datos.
-        cur.execute("SELECT fecha, COUNT(*) AS total FROM seguimiento_vias GROUP BY fecha ORDER BY fecha DESC LIMIT 30;")
-        fechas_existentes = [(str(r[0]), int(r[1])) for r in cur.fetchall()]
-
-        # 10) Diagnóstico: ¿cuántos registros hay SIN aplicar ningún filtro?
+        # Diagnostico: fechas existentes (sin filtros) y total sin filtro
+        cur.execute("SELECT fecha, COUNT(*) FROM seguimiento_vias GROUP BY fecha ORDER BY fecha DESC LIMIT 30;")
+        for r in cur.fetchall():
+            fechas_existentes.append((str(r[0]), int(r[1])))
         cur.execute("SELECT COUNT(*) FROM seguimiento_vias;")
-        total_sin_filtro = cur.fetchone()[0] or 0
+        row = cur.fetchone()
+        total_sin_filtro = int(row[0]) if row and row[0] is not None else 0
 
     except (OperationalError, DatabaseError) as e:
         app.logger.error(f"estadisticas DB error: {e}")
-        dias_labels, dias_data = [], []
-        dias_turno_labels, dias_dia_data, dias_noche_data = [], [], []
-        bloques = {'Dia (05-17)': 0, 'Noche (17-05)': 0}
-        empresas_labels, empresas_data = [], []
-        respon_labels, respon_data = [], []
-        estados = {'En Vía': 0, 'Liberado': 0}
-        total_reg, total_dia, total_noche, total_archivados = 0, 0, 0, 0
-        dias_semana_labels, dias_semana_data = [], []
-        promedio_duracion_min = 0.0
-        zonas_labels, zonas_data = [], []
-        fechas_existentes = []
-        total_sin_filtro = 0
+        # Todo se queda en valores vacios
     finally:
-        if cur:
-            cur.close()
-        if conn:
-            conn.close()
+        if cur: cur.close()
+        if conn: conn.close()
 
     return render_template('estadisticas.html',
         dias_labels=dias_labels, dias_data=dias_data,
