@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCO L2 - Control de Ingreso a Vía</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        :root {
+            --ml-blue: #1B3A6B;
+            --ml-blue-dark: #142A50;
+            --ml-red: #E30613;
+            --ml-red-dark: #B50510;
+            --ml-yellow: #FFC72C;
+            --ml-yellow-dark: #E0AE1F;
+            --ml-cyan: #00A0DC;
+            --ml-cyan-dark: #007FB0;
+            --ml-gray: #6E7376;
+            --ml-gray-light: #E9ECEC;
+            --ml-white: #FFFFFF;
+        }
+        html, body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        body { background: #F4F6F9; }
+
+        /* ====== NAVBAR ====== */
+        .navbar-pco {
+            background: linear-gradient(135deg, var(--ml-blue-dark) 0%, var(--ml-blue) 100%);
+            border-bottom: 4px solid var(--ml-red);
+            padding: 0.55rem 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+        }
+        .navbar-pco .brand {
+            color: #fff; font-weight: 800; font-size: 1.3rem; letter-spacing: 1.5px;
+            text-decoration: none; display: inline-flex; align-items: baseline; gap: 0.3rem;
+        }
+        .navbar-pco .brand .badge-logo {
+            background: var(--ml-red); color: #fff; font-weight: 900; font-size: 0.95rem;
+            padding: 0.18rem 0.5rem; border-radius: 5px; letter-spacing: 1px;
+        }
+        .navbar-pco .brand .badge-l2 {
+            background: var(--ml-yellow); color: var(--ml-blue-dark); font-weight: 900;
+            font-size: 0.85rem; padding: 0.15rem 0.45rem; border-radius: 5px; letter-spacing: 0.5px;
+        }
+        .navbar-pco .brand small {
+            font-size: 0.7rem; font-weight: 400; color: #AEC0DA; display: block;
+            margin-top: -2px; letter-spacing: 0.5px;
+        }
+        .navbar-pco .nav-btn {
+            color: #D6E0EE; text-decoration: none; font-size: 0.82rem; font-weight: 600;
+            padding: 0.42rem 1rem; border-radius: 7px; transition: all 0.2s; border: 1px solid transparent;
+        }
+        .navbar-pco .nav-btn:hover {
+            color: #fff; background: rgba(0,160,220,0.18); border-color: var(--ml-cyan);
+        }
+        .navbar-pco .nav-btn.primary {
+            background: var(--ml-red); color: #fff; border-color: var(--ml-red);
+        }
+        .navbar-pco .nav-btn.primary:hover { background: var(--ml-red-dark); border-color: var(--ml-red-dark); }
+        .navbar-pco .nav-btn.cyan {
+            background: var(--ml-cyan); color: #fff; border-color: var(--ml-cyan);
+        }
+        .navbar-pco .nav-btn.cyan:hover { background: var(--ml-cyan-dark); border-color: var(--ml-cyan-dark); }
+
+        /* ====== TARJETAS ====== */
+        .card-pco {
+            border: none; border-radius: 10px; box-shadow: 0 2px 14px rgba(27,58,107,0.08);
+            overflow: hidden;
+        }
+        .card-pco .card-header {
+            font-weight: 700; font-size: 0.82rem; letter-spacing: 0.4px;
+            padding: 0.65rem 1rem;
+        }
+        .card-pco .card-header.bg-ml-blue {
+            background: var(--ml-blue); color: #fff; border-bottom: 3px solid var(--ml-red);
+        }
+        .card-pco .card-header.bg-ml-red {
+            background: var(--ml-red); color: #fff;
+        }
+        .card-pco .card-header.bg-ml-yellow {
+            background: var(--ml-yellow); color: var(--ml-blue-dark); border-bottom: 3px solid var(--ml-blue);
+        }
+        .card-pco .card-header.bg-ml-cyan {
+            background: var(--ml-cyan); color: #fff;
+        }
+        .card-border-ml-red { border-left: 5px solid var(--ml-red) !important; }
+        .card-border-ml-cyan { border-left: 5px solid var(--ml-cyan) !important; }
+        .card-border-ml-yellow { border-left: 5px solid var(--ml-yellow) !important; }
+
+        /* ====== TABLAS ====== */
+        .table-pco thead th {
+            background: var(--ml-blue); color: #fff; font-size: 0.72rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.6px; padding: 0.65rem 0.5rem; border: none;
+        }
+        .table-pco tbody td { font-size: 0.82rem; padding: 0.5rem; vertical-align: middle; }
+        .table-pco tbody tr:hover { background: rgba(0,160,220,0.06); }
+
+        /* ====== FORMULARIOS ====== */
+        .form-label-l2 { font-size: 0.74rem; font-weight: 700; color: #37474f; margin-bottom: 0.15rem; }
+        .btn-ml-red { background: var(--ml-red); color: #fff; border: none; font-weight: 700; }
+        .btn-ml-red:hover { background: var(--ml-red-dark); color: #fff; }
+        .btn-ml-cyan { background: var(--ml-cyan); color: #fff; border: none; font-weight: 700; }
+        .btn-ml-cyan:hover { background: var(--ml-cyan-dark); color: #fff; }
+        .btn-ml-yellow { background: var(--ml-yellow); color: var(--ml-blue-dark); border: none; font-weight: 700; }
+        .btn-ml-yellow:hover { background: var(--ml-yellow-dark); color: var(--ml-blue-dark); }
+
+        /* Badge de estado "En Vía" */
+        .badge-en-via { background: var(--ml-red); color: #fff; }
+        .badge-liberado { background: var(--ml-gray); color: #fff; }
+
+        /* Cabecera de turno */
+        .turno-chip {
+            display: inline-block; background: var(--ml-yellow); color: var(--ml-blue-dark);
+            font-weight: 800; font-size: 0.7rem; padding: 0.2rem 0.55rem; border-radius: 20px;
+            margin-right: 0.4rem;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ====== NAVBAR ====== -->
+    <nav class="navbar-pco d-flex justify-content-between align-items-center">
+        <a href="/" class="brand">
+            <span class="badge-logo">M</span>
+            <span class="badge-l2">L2</span>
+            <span style="margin-left:0.35rem;">PCO</span>
+            <small>Puesto Central de Operaciones · Metro de Lima Línea 2</small>
+        </a>
+        <div class="d-flex align-items-center gap-2">
+            <a href="/mapa" class="nav-btn">🗺️ Mapa</a>
+            <a href="/historial" class="nav-btn">🔍 Historial</a>
+            <a href="/exportar" class="nav-btn primary">📥 Reporte Excel</a>
+            <button class="nav-btn cyan" onclick="document.getElementById('excelFileInput').click()">📂 Importar</button>
+        </div>
+        <input type="file" id="excelFileInput" accept=".xlsx" style="display:none;">
+    </nav>
+
+    <div class="container-fluid py-3">
+
+        <!-- CONTENEDOR DE ALERTAS -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show fw-bold shadow-sm mb-4" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="row g-3">
+            <!-- ====== BLOQUE LATERAL IZQUIERDO ====== -->
+            <div class="col-xl-3 col-md-4 mb-4">
+
+                <!-- Tarjeta 1: Datos del Turno -->
+                <div class="card card-pco mb-3 card-border-ml-red">
+                    <div class="card-header bg-ml-blue"><span class="turno-chip">1</span> Personal Responsable del Turno</div>
+                    <div class="card-body py-2">
+                        <form action="/configurar_turno" method="POST">
+                            <div class="mb-1">
+                                <label class="form-label-l2">Turno Actual</label>
+                                <select class="form-select form-select-sm" name="turno">
+                                    <option value="Turno 1" {% if turno_actual == 'Turno 1' %}selected{% endif %}>Turno 1 (Mañana)</option>
+                                    <option value="Turno 2" {% if turno_actual == 'Turno 2' %}selected{% endif %}>Turno 2 (Noche)</option>
+                                </select>
+                            </div>
+                            <div class="mb-1">
+                                <label class="form-label-l2">Operador ATS</label>
+                                <input type="text" class="form-control form-control-sm" name="operador_turno" value="{{ operador_actual }}" required placeholder="Fijar operador">
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-l2">Supervisor SPCO</label>
+                                <input type="text" class="form-control form-control-sm" name="spco_turno" value="{{ spco_actual }}" required placeholder="Fijar supervisor">
+                            </div>
+                            <button type="submit" class="btn btn-sm w-100 btn-ml-red">Fijar Datos del Turno</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Tarjeta 2: Registro Manual -->
+                <div class="card card-pco {% if not operador_actual %}opacity-50{% endif %}">
+                    <div class="card-header bg-ml-blue"><span class="turno-chip">2</span> Registro Manual de Trabajos</div>
+                    <div class="card-body">
+                        {% if not operador_actual %}
+                            <div class="alert alert-warning py-1 small text-center mb-0">Primero fija los datos del turno arriba.</div>
+                        {% endif %}
+                        <form action="/ingresar" method="POST">
+                            <div class="mb-2">
+                                <label class="form-label-l2">Empresa (Contratista)</label>
+                                <input type="text" class="form-control form-control-sm" name="empresa" value="{{ form_previo.get('empresa', '') }}" placeholder="Ej: TRIA, TELICE" list="empresas_comunes" required {% if not operador_actual %}disabled{% endif %}>
+                                <datalist id="empresas_comunes">
+                                    <option value="TRIA"></option>
+                                    <option value="TELICE"></option>
+                                    <option value="STECONFER"></option>
+                                </datalist>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-l2">Orden de Trabajo</label>
+                                <input type="text" class="form-control form-control-sm" name="orden_trabajo" value="{{ form_previo.get('orden_trabajo', '') }}" placeholder="Ej: SPV-SEM28-2026-001" {% if not operador_actual %}disabled{% endif %}>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-l2">Responsable de Trabajo</label>
+                                <input type="text" class="form-control form-control-sm" name="responsable" value="{{ form_previo.get('responsable', '') }}" required placeholder="Nombre del capataz" {% if not operador_actual %}disabled{% endif %}>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-l2">Ubicación / Zona de Trabajo</label>
+                                <input type="text" class="form-control form-control-sm fw-bold" style="border-color: var(--ml-blue);" name="ubicacion_zona" value="{{ form_previo.get('ubicacion_zona', '') }}" required placeholder="Ej: TK 1 + TK 2" {% if not operador_actual %}disabled{% endif %}>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col">
+                                    <label class="form-label-l2">N° Pers.</label>
+                                    <input type="number" class="form-control form-control-sm" name="num_personas" value="{{ form_previo.get('num_personas', '1') }}" required {% if not operador_actual %}disabled{% endif %}>
+                                </div>
+                                <div class="col">
+                                    <label class="form-label-l2">TETRA</label>
+                                    <input type="text" class="form-control form-control-sm" name="tetra" value="{{ form_previo.get('tetra', '') }}" placeholder="ID Radio" {% if not operador_actual %}disabled{% endif %}>
+                                </div>
+                            </div>
+
+                            <!-- SECCIÓN VEHÍCULO AUXILIAR -->
+                            <hr class="my-2">
+                            <div class="mb-2">
+                                <label class="form-label-l2" style="color: var(--ml-red);">¿Ingresa Vehículo Auxiliar?</label>
+                                <select class="form-select form-select-sm" style="border-color: var(--ml-red);" name="usa_vehiculo" id="selectVehiculo" onchange="toggleVehiculoForm()" {% if not operador_actual %}disabled{% endif %}>
+                                    <option value="no" {% if form_previo.get('usa_vehiculo') == 'no' %}selected{% endif %}>No (Trabajo Peatonal)</option>
+                                    <option value="si" {% if form_previo.get('usa_vehiculo') == 'si' %}selected{% endif %}>Sí (Tren, Geismar, Bivial...)</option>
+                                </select>
+                            </div>
+
+                            <div id="campos_vehiculo_form" class="{% if form_previo.get('usa_vehiculo') == 'si' %}{% else %}d-none{% endif %} border p-2 rounded mb-3" style="border-color: var(--ml-red) !important; background: #FAFBFC;">
+                                <div class="mb-1">
+                                    <label class="form-label-l2 text-muted">Tipo de Vehículo</label>
+                                    <select class="form-select form-select-sm" name="tipo_vehiculo">
+                                        <option value="Geismar" {% if form_previo.get('tipo_vehiculo') == 'Geismar' %}selected{% endif %}>Geismar</option>
+                                        <option value="Bivial" {% if form_previo.get('tipo_vehiculo') == 'Bivial' %}selected{% endif %}>Bivial</option>
+                                        <option value="Malif" {% if form_previo.get('tipo_vehiculo') == 'Malif' %}selected{% endif %}>Malif</option>
+                                        <option value="Tren" {% if form_previo.get('tipo_vehiculo') == 'Tren' %}selected{% endif %}>Tren</option>
+                                        <option value="Otro" {% if form_previo.get('tipo_vehiculo') == 'Otro' %}selected{% endif %}>Otro</option>
+                                    </select>
+                                </div>
+                                <div class="mb-1">
+                                    <label class="form-label-l2 text-muted">Código (Ej. 1100)</label>
+                                    <input type="text" class="form-control form-control-sm" name="codigo_vehiculo" value="{{ form_previo.get('codigo_vehiculo', '') }}">
+                                </div>
+                                <div>
+                                    <label class="form-label-l2 text-muted">Conductor</label>
+                                    <input type="text" class="form-control form-control-sm" name="conductor_vehiculo" value="{{ form_previo.get('conductor_vehiculo', '') }}" placeholder="Nombre habilitado">
+                                </div>
+                            </div>
+
+                            <!-- ALERTA REALTIME DE SAFETY -->
+                            <div id="realtime-safety-alert" class="alert alert-danger d-none fw-bold small py-2 my-2 shadow-sm border border-danger"></div>
+
+                            <button type="submit" id="btnAutorizar" class="btn w-100 fw-bold py-2 mt-2 btn-ml-red" {% if not operador_actual %}disabled{% endif %}>AUTORIZAR INGRESO</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ====== TABLA DE MONITOREO ====== -->
+            <div class="col-xl-9 col-md-8">
+
+                <!-- TARJETA DE IMPORTACIÓN PREVIA -->
+                <div class="card card-pco mb-3 {% if not importados_pendientes %}d-none{% endif %}" id="importPreviewCard" style="border-left:5px solid var(--ml-cyan);">
+                    <div class="card-header bg-ml-cyan d-flex justify-content-between align-items-center">
+                        <span>📋 Pendientes de Confirmación (Importados de Excel)</span>
+                        <button class="btn btn-sm btn-light fw-bold" onclick="document.getElementById('excelFileInput').click()">📁 Importar Otro</button>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table class="table table-hover mb-0 text-center align-middle">
+                                <thead class="text-nowrap" style="position: sticky; top: 0; z-index: 1; background:var(--ml-cyan);color:#fff;">
+                                    <tr>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">SPCO</th>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Operador</th>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Desde</th>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Hasta</th>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Responsable</th>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">TETRA</th>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Orden Trabajo</th>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Ingresar</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="importPreviewBody">
+                                    {% for item in importados_pendientes %}
+                                    <tr id="importRow{{ loop.index0 }}">
+                                        <td class="small">{{ item.spco }}</td>
+                                        <td class="small">{{ item.operador }}</td>
+                                        <td class="small">{{ item.desde }}</td>
+                                        <td class="small">{{ item.hasta }}</td>
+                                        <td class="small">{{ item.responsable }}</td>
+                                        <td class="small">{{ item.tetra }}</td>
+                                        <td class="small">{{ item.orden_trabajo }}</td>
+                                        <td><input type="checkbox" class="form-check-input" onchange="confirmarImportado(this, {{ loop.index0 }})"></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-center text-muted small py-2 {% if importados_pendientes %}d-none{% endif %}" id="importPreviewEmpty">Selecciona un archivo Excel para importar trabajos.</div>
+                    </div>
+                </div>
+
+                <div class="card card-pco">
+
+                    <div class="card-header bg-ml-blue d-flex justify-content-between align-items-center">
+                        <span>⚡ Trabajos en Vía · Monitoreo en Tiempo Real</span>
+                        <form action="/archivar_turno" method="POST" class="m-0" onsubmit="return confirm('¿Estás seguro de limpiar la pantalla? Esto archivará los trabajos terminados y dejará solo los activos para el relevo de turno.');">
+                            <button type="submit" class="btn btn-sm fw-bold btn-ml-yellow">🧹 Archivar Turno</button>
+                        </form>
+                    </div>
+
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0 text-center align-middle table-pco" id="tabla-monitoreo">
+                                <thead class="text-nowrap">
+                                    <tr>
+                                        <th>Inic.</th>
+                                        <th>Fin</th>
+                                        <th>Empresa</th>
+                                        <th>Ord. Trabajo</th>
+                                        <th>Responsable / ZONA</th>
+                                        <th>Vehículo</th>
+                                        <th>Personal PCO</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for r in registros %}
+                                    <tr class="{% if r[12] %}table-light opacity-75 text-muted{% endif %}">
+                                        <td><span class="badge" style="background:var(--ml-blue);color:#fff;">{{ r[11].strftime('%H:%M:%S') if r[11] else '' }}</span></td>
+                                        <td>
+                                            {% if r[12] %}
+                                                <span class="badge badge-liberado">{{ r[12].strftime('%H:%M:%S') }}</span>
+                                            {% else %}
+                                                <span class="badge badge-en-via">En Vía</span>
+                                            {% endif %}
+                                        </td>
+                                        <td><strong>{{ r[3] }}</strong></td>
+                                        <td><span class="badge" style="background:var(--ml-cyan);color:#fff;">{{ r[4] }}</span></td>
+                                        <td>
+                                            <div class="fw-bold">{{ r[5] }}</div>
+                                            <div class="fw-bold {% if not r[12] %}text-danger{% endif %}">{{ r[6] }}</div>
+                                            <div class="small text-muted">{{ r[7] }} Pers. | TETRA: {{ r[10] }}</div>
+                                        </td>
+                                        <td>
+                                            {% if r[16] %}
+                                                <div class="border rounded px-2 py-1 bg-white text-start" style="border-color:var(--ml-red);">
+                                                    <strong class="small" style="color:var(--ml-red);">{{ r[17] }} {{ r[18] }}</strong><br>
+                                                    <span class="small text-muted">Cond: {{ r[19] }}</span>
+                                                </div>
+                                            {% else %}
+                                                <span class="badge bg-light text-secondary border">Peatonal</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="small text-start">
+                                            <strong>ATS:</strong> {{ r[13] }}<br>
+                                            <strong>SPCO:</strong> {{ r[14] }}
+                                        </td>
+                                        <td class="text-nowrap">
+                                            {% if not r[12] %}
+                                                <a href="/liberar/{{ r[0] }}" class="btn btn-sm btn-ml-red fw-bold me-1">Liberar</a>
+                                            {% else %}
+                                                <a href="/revertir/{{ r[0] }}" class="btn btn-sm btn-ml-yellow fw-bold me-1">Revertir</a>
+                                            {% endif %}
+                                            {% if r[4] and r[4] != '-' and r[4] != '' %}
+                                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado({{ r[0] }})">↩ Importados</button>
+                                            {% endif %}
+                                            <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-bs-toggle="modal" data-bs-target="#editModal{{ r[0] }}">Corregir</button>
+                                            <a href="/eliminar/{{ r[0] }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar por completo?');">🗑️</a>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="8" class="text-muted py-4">No hay trabajos registrados en vía actualmente.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals de Edición -->
+    {% for r in registros %}
+    <div class="modal fade" id="editModal{{ r[0] }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header" style="background:var(--ml-blue);color:#fff;">
+                    <h5 class="modal-title">Corregir Registro</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="/editar/{{ r[0] }}" method="POST">
+                    <div class="modal-body text-start">
+                        <div class="row mb-2">
+                            <div class="col"><label class="form-label-l2">Hora Inic.</label><input type="text" class="form-control form-control-sm" name="hora_inicio" value="{{ r[11].strftime('%H:%M:%S') if r[11] else '' }}" required></div>
+                            <div class="col"><label class="form-label-l2">Hora Fin</label><input type="text" class="form-control form-control-sm" name="hora_fin" value="{{ r[12].strftime('%H:%M:%S') if r[12] else '' }}"></div>
+                        </div>
+                        <div class="mb-2"><label class="form-label-l2">Empresa</label><input type="text" class="form-control form-control-sm" name="empresa" value="{{ r[3] }}" required></div>
+                        <div class="mb-2"><label class="form-label-l2">Orden de Trabajo</label><input type="text" class="form-control form-control-sm" name="orden_trabajo" value="{{ r[4] }}"></div>
+                        <div class="mb-2"><label class="form-label-l2">Responsable</label><input type="text" class="form-control form-control-sm" name="responsable" value="{{ r[5] }}" required></div>
+                        <div class="mb-2"><label class="form-label-l2">Zona</label><input type="text" class="form-control form-control-sm" name="ubicacion_zona" value="{{ r[6] }}" required></div>
+
+                        <div class="p-2 border rounded mb-2" style="border-color:var(--ml-red)!important;background:#FAFBFC;">
+                            <label class="form-label-l2" style="color:var(--ml-red);">¿Usa Vehículo Auxiliar?</label>
+                            <select class="form-select form-select-sm mb-2" style="border-color:var(--ml-red);" name="usa_vehiculo">
+                                <option value="no" {% if not r[16] %}selected{% endif %}>No (Trabajo Peatonal)</option>
+                                <option value="si" {% if r[16] %}selected{% endif %}>Sí</option>
+                            </select>
+                            <div class="row">
+                                <div class="col-4"><input type="text" class="form-control form-control-sm" name="tipo_vehiculo" placeholder="Tipo" value="{{ r[17] }}"></div>
+                                <div class="col-4"><input type="text" class="form-control form-control-sm" name="codigo_vehiculo" placeholder="Código" value="{{ r[18] }}"></div>
+                                <div class="col-4"><input type="text" class="form-control form-control-sm" name="conductor_vehiculo" placeholder="Conductor" value="{{ r[19] }}"></div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col mb-2"><label class="form-label-l2">N° Personas</label><input type="number" class="form-control form-control-sm" name="num_personas" value="{{ r[7] }}" required></div>
+                            <div class="col mb-2"><label class="form-label-l2">TETRA</label><input type="text" class="form-control form-control-sm" name="tetra" value="{{ r[10] }}"></div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-sm btn-ml-red">Guardar Cambios</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleVehiculoForm() {
+            const select = document.getElementById('selectVehiculo');
+            const campos = document.getElementById('campos_vehiculo_form');
+            if (select.value === 'si') {
+                campos.classList.remove('d-none');
+            } else {
+                campos.classList.add('d-none');
+            }
+        }
+
+        let debounceTimer;
+
+        function verificarSafetyRealtime() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                const ubicacion_zona = document.querySelector('[name="ubicacion_zona"]').value;
+                const usa_vehiculo = document.getElementById('selectVehiculo').value;
+                const tipo_vehiculo = document.querySelector('[name="tipo_vehiculo"]').value;
+                const codigo_vehiculo = document.querySelector('[name="codigo_vehiculo"]').value;
+                const empresa = document.querySelector('[name="empresa"]').value;
+
+                const alertDiv = document.getElementById('realtime-safety-alert');
+                const btnSubmit = document.getElementById('btnAutorizar');
+
+                if (!ubicacion_zona.trim()) {
+                    alertDiv.classList.add('d-none');
+                    {% if operador_actual %}
+                    btnSubmit.removeAttribute('disabled');
+                    {% endif %}
+                    return;
+                }
+
+                fetch('/verificar_safety', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ubicacion_zona: ubicacion_zona,
+                        usa_vehiculo: usa_vehiculo,
+                        tipo_vehiculo: tipo_vehiculo,
+                        codigo_vehiculo: codigo_vehiculo,
+                        empresa: empresa
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.bloqueo) {
+                        alertDiv.innerText = data.mensaje;
+                        alertDiv.classList.remove('d-none');
+                        btnSubmit.setAttribute('disabled', 'true');
+                    } else {
+                        alertDiv.classList.add('d-none');
+                        {% if operador_actual %}
+                        btnSubmit.removeAttribute('disabled');
+                        {% endif %}
+                    }
+                })
+                .catch(err => {
+                    console.error('Error al verificar safety:', err);
+                });
+            }, 300);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputUbicacion = document.querySelector('[name="ubicacion_zona"]');
+            const selectVehiculo = document.getElementById('selectVehiculo');
+            const selectTipo = document.querySelector('[name="tipo_vehiculo"]');
+            const inputCodigo = document.querySelector('[name="codigo_vehiculo"]');
+            const inputEmpresa = document.querySelector('[name="empresa"]');
+
+            if (inputUbicacion) {
+                inputUbicacion.addEventListener('input', verificarSafetyRealtime);
+            }
+            if (selectVehiculo) {
+                selectVehiculo.addEventListener('change', () => {
+                    toggleVehiculoForm();
+                    verificarSafetyRealtime();
+                });
+            }
+            if (selectTipo) {
+                selectTipo.addEventListener('change', verificarSafetyRealtime);
+            }
+            if (inputCodigo) {
+                inputCodigo.addEventListener('input', verificarSafetyRealtime);
+            }
+            if (inputEmpresa) {
+                inputEmpresa.addEventListener('input', verificarSafetyRealtime);
+            }
+
+            const fileInput = document.getElementById('excelFileInput');
+            if (fileInput) {
+                fileInput.addEventListener('change', function(e) {
+                    if (this.files && this.files[0]) {
+                        importarExcel(this.files[0]);
+                    }
+                });
+            }
+        });
+
+        function importarExcel(file) {
+            const formData = new FormData();
+            formData.append('excel_file', file);
+
+            fetch('/importar_excel', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                if (!data.datos || data.datos.length === 0) {
+                    alert('No hay trabajos CONFIRMADOS con ACCESO A VÍA = SI en este archivo.');
+                    return;
+                }
+                location.reload();
+            })
+            .catch(err => {
+                alert('Error al procesar: ' + err.message);
+            });
+        }
+
+        function escapeHtml(t) {
+            if (!t) return '';
+            return String(t).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"');
+        }
+
+        function confirmarImportado(checkbox, idx) {
+            if (!checkbox.checked) return;
+
+            const row = document.getElementById('importRow' + idx);
+            if (!row) { checkbox.checked = false; return; }
+
+            const celdas = row.querySelectorAll('td');
+            const spco = celdas[0].textContent.trim();
+            const operador = celdas[1].textContent.trim();
+            const desde = celdas[2].textContent.trim();
+            const hasta = celdas[3].textContent.trim();
+            const responsable = celdas[4].textContent.trim();
+            const tetra = celdas[5].textContent.trim();
+            const orden = celdas[6].textContent.trim();
+            const zona = desde + ' -> ' + hasta;
+
+            const ahora = new Date();
+            const horaActual = String(ahora.getHours()).padStart(2,'0') + ':' +
+                               String(ahora.getMinutes()).padStart(2,'0') + ':' +
+                               String(ahora.getSeconds()).padStart(2,'0');
+
+            fetch('/confirmar_importado', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ _idx: idx, hora_inicio: horaActual })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (!result.success) {
+                    checkbox.checked = false;
+                    alert('Error al confirmar el ingreso.');
+                    return;
+                }
+
+                row.remove();
+
+                const monTbody = document.querySelector('#tabla-monitoreo tbody');
+                if (!monTbody) return;
+
+                const emptyRow = monTbody.querySelector('td[colspan]');
+                if (emptyRow) emptyRow.parentElement.remove();
+
+                const newId = result.id;
+                const nuevaFila = document.createElement('tr');
+                nuevaFila.innerHTML = `
+                    <td><span class="badge" style="background:var(--ml-blue);color:#fff;">${escapeHtml(horaActual)}</span></td>
+                    <td><span class="badge badge-en-via">En Vía</span></td>
+                    <td><strong>${escapeHtml(result.empresa)}</strong></td>
+                    <td><span class="badge" style="background:var(--ml-cyan);color:#fff;">${escapeHtml(orden)}</span></td>
+                    <td>
+                        <div class="fw-bold">${escapeHtml(responsable)}</div>
+                        <div class="fw-bold text-danger">${escapeHtml(zona)}</div>
+                        <div class="small text-muted">0 Pers. | TETRA: ${escapeHtml(tetra)}</div>
+                    </td>
+                    <td><span class="badge bg-light text-secondary border">Peatonal</span></td>
+                    <td class="small text-start">
+                        <strong>ATS:</strong> ${escapeHtml(operador)}<br>
+                        <strong>SPCO:</strong> ${escapeHtml(spco)}
+                    </td>
+                    <td class="text-nowrap">
+                        <a href="/liberar/${newId}" class="btn btn-sm btn-ml-red fw-bold me-1">Liberar</a>
+                        <button type="button" class="btn btn-sm fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado(${newId})">↩ Importados</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="alert('Recarga la página para editar este registro.')">Corregir</button>
+                        <a href="/eliminar/${newId}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar por completo?');">🗑️</a>
+                    </td>
+                `;
+                monTbody.insertBefore(nuevaFila, monTbody.firstChild);
+
+                const previewBody = document.getElementById('importPreviewBody');
+                if (previewBody && previewBody.querySelectorAll('tr').length === 0) {
+                    document.getElementById('importPreviewEmpty').classList.remove('d-none');
+                }
+            })
+            .catch(err => {
+                checkbox.checked = false;
+                alert('Error de conexión: ' + err.message);
+            });
+        }
+
+        function revertirImportado(id) {
+            if (!confirm('¿Revertir este trabajo importado de vuelta a la lista de pendientes?')) return;
+
+            fetch('/revertir_importado/' + id)
+            .then(response => response.json())
+            .then(result => {
+                if (result.success) {
+                    location.reload();
+                } else {
+                    alert('Error al revertir.');
+                }
+            })
+            .catch(err => {
+                alert('Error de conexión: ' + err.message);
+            });
+        }
+    </script>
+</body>
+</html>

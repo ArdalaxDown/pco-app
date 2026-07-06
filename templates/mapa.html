@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCO L2 - Monitor Geométrico de Vía</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        :root {
+            --ml-blue: #1B3A6B;
+            --ml-blue-dark: #142A50;
+            --ml-red: #E30613;
+            --ml-yellow: #FFC72C;
+            --ml-cyan: #00A0DC;
+            --ml-gray: #6E7376;
+        }
+        html, body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        body { background-color: #0F1B33; color: #fff; }
+
+        .navbar-pco {
+            background: linear-gradient(135deg, var(--ml-blue-dark) 0%, var(--ml-blue) 100%);
+            border-bottom: 4px solid var(--ml-red);
+            padding: 0.55rem 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+        }
+        .navbar-pco .brand {
+            color: #fff; font-weight: 800; font-size: 1.3rem; letter-spacing: 1.5px;
+            text-decoration: none; display: inline-flex; align-items: baseline; gap: 0.3rem;
+        }
+        .navbar-pco .brand .badge-logo {
+            background: var(--ml-red); color: #fff; font-weight: 900; font-size: 0.95rem;
+            padding: 0.18rem 0.5rem; border-radius: 5px; letter-spacing: 1px;
+        }
+        .navbar-pco .brand .badge-l2 {
+            background: var(--ml-yellow); color: var(--ml-blue-dark); font-weight: 900;
+            font-size: 0.85rem; padding: 0.15rem 0.45rem; border-radius: 5px; letter-spacing: 0.5px;
+        }
+        .navbar-pco .brand small {
+            font-size: 0.7rem; font-weight: 400; color: #AEC0DA; display: block;
+            margin-top: -2px; letter-spacing: 0.5px;
+        }
+        .navbar-pco .nav-btn {
+            color: #D6E0EE; text-decoration: none; font-size: 0.82rem; font-weight: 600;
+            padding: 0.42rem 1rem; border-radius: 7px; transition: all 0.2s; border: 1px solid transparent;
+        }
+        .navbar-pco .nav-btn:hover { color: #fff; background: rgba(0,160,220,0.18); border-color: var(--ml-cyan); }
+
+        .contenedor-plano {
+            position: relative;
+            width: 1700px;
+            height: 820px;
+            background-image: url("{{ url_for('static', filename='mapa_real.png') }}");
+            background-size: contain;
+            background-repeat: no-repeat;
+        }
+
+        .zona-resaltado {
+            position: absolute;
+            background-color: rgba(0, 0, 0, 0);
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .zona-resaltado.peatonal {
+            background-color: rgba(255, 199, 44, 0.40) !important;
+            border: 2px solid var(--ml-yellow);
+        }
+        .zona-resaltado.vehiculo {
+            background-color: rgba(227, 6, 19, 0.50) !important;
+            border: 2px solid var(--ml-red);
+            box-shadow: 0 0 20px rgba(227, 6, 19, 0.7);
+        }
+
+        .tooltip-inner {
+            max-width: 350px !important;
+            text-align: left !important;
+            font-size: 12px;
+            background-color: var(--ml-blue-dark);
+            border: 1px solid var(--ml-cyan);
+        }
+        .tooltip.show { opacity: 1; }
+
+        .work-card {
+            background: #1A2A47;
+            border-left: 4px solid;
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-bottom: 8px;
+        }
+        .work-card.peatonal { border-left-color: var(--ml-yellow); }
+        .work-card.vehiculo { border-left-color: var(--ml-red); }
+        .work-card .label { color: #88A0BE; font-size: 11px; }
+        .work-card .value { color: #fff; font-weight: bold; font-size: 13px; }
+    </style>
+    <meta http-equiv="refresh" content="15">
+</head>
+<body>
+    <nav class="navbar-pco d-flex justify-content-between align-items-center">
+        <a href="/" class="brand">
+            <span class="badge-logo">M</span>
+            <span class="badge-l2">L2</span>
+            <span style="margin-left:0.35rem;">PCO</span>
+            <small>Monitor Geométrico de Vía</small>
+        </a>
+        <div class="d-flex align-items-center gap-2">
+            <a href="/" class="nav-btn">← Panel de Control</a>
+            <a href="/historial" class="nav-btn">🔍 Historial</a>
+        </div>
+    </nav>
+    <div class="container-fluid p-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h3 style="color:var(--ml-yellow);font-weight:800;margin:0;">MONITOR GEOMÉTRICO · TRABAJOS EN VÍA</h3>
+                <p style="color:#88A0BE;margin:0;font-size:0.85rem;">Pasa el mouse sobre una zona resaltada para ver los detalles del trabajo</p>
+            </div>
+        </div>
+
+        <div class="overflow-auto border rounded shadow-lg" style="border-color:var(--ml-cyan);background:#0A1525;">
+            <div class="contenedor-plano">
+
+                {% for zona in zonas_data %}
+                <div class="zona-resaltado {% if zona.usa_vehiculo %}vehiculo{% else %}peatonal{% endif %}"
+                     style="top: {{ zona.top }}px; left: {{ zona.left }}px; width: {{ zona.width }}px; height: {{ zona.height }}px;"
+                     data-bs-toggle="tooltip" 
+                     data-bs-placement="top" 
+                     data-bs-html="true"
+                     title="<b>{{ zona.label }}</b><br>
+                            🏢 <b>{{ zona.empresa }}</b><br>
+                            👷 {{ zona.responsable }}<br>
+                            👥 {{ zona.num_personas }} Pers. | 📻 {{ zona.tetra }}<br>
+                            {% if zona.usa_vehiculo %}🚜 {{ zona.tipo_vehiculo }} {{ zona.codigo_vehiculo }}{% else %}🚶 Trabajo Peatonal{% endif %}">
+                </div>
+                {% endfor %}
+
+            </div>
+        </div>
+
+        <div class="rounded border p-3 mt-3" style="background:#0A1525;border-color:var(--ml-cyan);">
+            <h6 style="color:var(--ml-yellow);font-weight:800;margin-bottom:1rem;">📋 TRABAJOS EN VÍA</h6>
+            {% if trabajos_resumen %}
+                <div class="row">
+                {% for t in trabajos_resumen %}
+                    <div class="col-xl-4 col-lg-6 mb-2">
+                    <div class="work-card {% if t.usa_vehiculo %}vehiculo{% else %}peatonal{% endif %}">
+                        <div class="d-flex justify-content-between">
+                            <span class="value" style="font-size:14px;">{{ t.empresa }}</span>
+                            <span class="badge {% if t.usa_vehiculo %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                                {{ t.num_personas }} Pers
+                            </span>
+                        </div>
+                        <div class="label">Zona</div>
+                        <div class="value">{{ t.zona }}</div>
+                        <div class="d-flex justify-content-between mt-1">
+                            <div>
+                                <div class="label">Responsable</div>
+                                <div class="value" style="font-size:12px;">{{ t.responsable }}</div>
+                            </div>
+                            <div class="text-end">
+                                <div class="label">TETRA</div>
+                                <div class="value" style="font-size:12px;">{{ t.tetra }}</div>
+                            </div>
+                        </div>
+                        {% if t.usa_vehiculo %}
+                        <div class="mt-1">
+                            <div class="label">Vehículo</div>
+                            <div class="value" style="font-size:12px;">🚜 {{ t.tipo_vehiculo }} {{ t.codigo_vehiculo }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    </div>
+                {% endfor %}
+                </div>
+            {% else %}
+                <p style="color:#88A0BE;" class="small m-0">No hay trabajos activos en este momento.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    </script>
+</body>
+</html>

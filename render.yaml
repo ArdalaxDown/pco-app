@@ -1,0 +1,18 @@
+# Configuración para despliegue en Render.com
+# Documentación: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: pco-app
+    env: python
+    region: oregon          # Cambia a la región más cercana (oregon/frankfurt/singapore)
+    plan: free              # Plan gratuito (duerme tras 15 min inactivo)
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120
+    healthCheckPath: /
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true   # Render genera una clave segura automáticamente
+      - key: DATABASE_URL
+        sync: false           # Lo configurarás manualmente con la URL de Neon
+      - key: PYTHON_VERSION
+        value: 3.13.7         # Render soporta 3.13; ajusta si es necesario

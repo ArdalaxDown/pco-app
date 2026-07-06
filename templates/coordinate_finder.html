@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>PCO L2 - Marcador de Zonas</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        :root {
+            --ml-blue: #1B3A6B;
+            --ml-blue-dark: #142A50;
+            --ml-red: #E30613;
+            --ml-yellow: #FFC72C;
+            --ml-cyan: #00A0DC;
+        }
+        html, body { font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background: #0F1B33; color: #fff; }
+
+        .navbar-pco {
+            background: linear-gradient(135deg, var(--ml-blue-dark) 0%, var(--ml-blue) 100%);
+            border-bottom: 4px solid var(--ml-red);
+            padding: 0.55rem 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+            margin-bottom: 1rem;
+        }
+        .navbar-pco .brand {
+            color: #fff; font-weight: 800; font-size: 1.3rem; letter-spacing: 1.5px;
+            text-decoration: none; display: inline-flex; align-items: baseline; gap: 0.3rem;
+        }
+        .navbar-pco .brand .badge-logo {
+            background: var(--ml-red); color: #fff; font-weight: 900; font-size: 0.95rem;
+            padding: 0.18rem 0.5rem; border-radius: 5px; letter-spacing: 1px;
+        }
+        .navbar-pco .brand .badge-l2 {
+            background: var(--ml-yellow); color: var(--ml-blue-dark); font-weight: 900;
+            font-size: 0.85rem; padding: 0.15rem 0.45rem; border-radius: 5px; letter-spacing: 0.5px;
+        }
+        .navbar-pco .brand small {
+            font-size: 0.7rem; font-weight: 400; color: #AEC0DA; display: block;
+            margin-top: -2px; letter-spacing: 0.5px;
+        }
+        .navbar-pco .nav-btn {
+            color: #D6E0EE; text-decoration: none; font-size: 0.82rem; font-weight: 600;
+            padding: 0.42rem 1rem; border-radius: 7px; transition: all 0.2s; border: 1px solid transparent;
+        }
+        .navbar-pco .nav-btn:hover { color: #fff; background: rgba(0,160,220,0.18); border-color: var(--ml-cyan); }
+
+        .map-wrapper {
+            position: relative;
+            width: 1700px;
+            height: 820px;
+            background-image: url('/static/mapa_real.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            border: 2px solid #2A3A57;
+            cursor: crosshair;
+            margin: 10px 0;
+            user-select: none;
+        }
+        .drawing-rect {
+            position: absolute;
+            border: 2px dashed var(--ml-cyan);
+            background: rgba(0, 160, 220, 0.15);
+            pointer-events: none;
+            display: none;
+        }
+        .saved-rect {
+            position: absolute;
+            border: 2px solid #0f0;
+            background: rgba(0, 255, 0, 0.08);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #0f0;
+            text-shadow: 0 0 6px #000;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .stats-panel {
+            background: #1A2A47;
+            border: 1px solid var(--ml-cyan);
+            border-radius: 8px;
+            padding: 15px;
+            position: sticky;
+            top: 20px;
+        }
+        .stats-panel h6 { color: var(--ml-yellow); border-bottom: 1px solid #2A3A57; padding-bottom: 5px; }
+        .zone-input {
+            background: #0A1525; color: #fff; border: 2px solid var(--ml-cyan);
+            padding: 10px 14px; width: 100%; font-family: monospace;
+            font-size: 16px; border-radius: 5px;
+        }
+        .zone-input:focus { outline: none; border-color: var(--ml-yellow); box-shadow: 0 0 12px rgba(255,199,44,0.3); }
+        .zone-input:disabled { border-color: #2A3A57; color: #5A6A87; }
+        .btn-act {
+            border: none; padding: 8px 16px; border-radius: 5px;
+            cursor: pointer; font-weight: bold; font-family: monospace; font-size: 13px;
+        }
+        .btn-act:hover { filter: brightness(1.2); }
+        .btn-act:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 3px 5px; text-align: left; border-bottom: 1px solid #2A3A57; }
+        th { color: var(--ml-yellow); font-size: 11px; }
+        .tabla-wrap { max-height: 260px; overflow-y: auto; }
+        #output {
+            background: #0A1525; color: #0f0; padding: 15px; border-radius: 5px;
+            margin-top: 10px; font-family: monospace; white-space: pre-wrap;
+            display: none; border: 1px solid var(--ml-cyan); max-height: 400px; overflow: auto;
+        }
+        .status-bar {
+            padding: 4px 10px; border-radius: 4px; font-size: 12px; margin-bottom: 8px;
+            text-align: center; font-weight: bold;
+        }
+        .status-ready { background: #1A3A1A; color: #0f0; border: 1px solid #0f0; }
+        .status-drawing { background: #0D2A3A; color: var(--ml-cyan); border: 1px solid var(--ml-cyan); }
+        .status-naming { background: #3A3A1A; color: var(--ml-yellow); border: 1px solid var(--ml-yellow); }
+    </style>
+</head>
+<body>
+    <nav class="navbar-pco d-flex justify-content-between align-items-center">
+        <a href="/" class="brand">
+            <span class="badge-logo">M</span>
+            <span class="badge-l2">L2</span>
+            <span style="margin-left:0.35rem;">PCO</span>
+            <small>Marcador de Zonas (Herramienta de Desarrollo)</small>
+        </a>
+        <a href="/mapa" class="nav-btn">← Volver al Mapa</a>
+    </nav>
+    <div class="container-fluid">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h3 style="color:var(--ml-cyan);font-weight:800;margin:0;">📍 Marcador de Zonas</h3>
+        </div>
+        <p style="color:#88A0BE;" class="small mb-2">
+            <strong>Instrucciones:</strong>
+            ① Arrastra sobre el mapa para dibujar un rectángulo &rarr;
+            ② Escribe el nombre &rarr;
+            ③ Presiona Enter. Repite las veces que necesites.
+        </p>
+
+        <div class="row">
+            <div class="col-9">
+                <div class="map-wrapper" id="mapWrapper">
+                    <div class="drawing-rect" id="drawingRect"></div>
+                </div>
+            </div>
+            <div class="col-3">
+                <div class="stats-panel">
+                    <div class="status-bar" id="statusBar">🟢 Arrastra sobre el mapa para empezar</div>
+
+                    <input type="text" id="zoneNameInput" class="zone-input mb-2"
+                           placeholder="1️⃣  Arrastra en el mapa..." list="zoneList" disabled>
+                    <datalist id="zoneList">
+                        <option value="E20"><option value="E21"><option value="E22">
+                        <option value="E23"><option value="E24"><option value="PV19">
+                        <option value="PV20"><option value="PV21"><option value="PV22">
+                        <option value="PV23"><option value="PV24"><option value="TK1">
+                        <option value="TK2"><option value="TK3"><option value="TK4">
+                        <option value="TK5"><option value="TK_TEST"><option value="ZM">
+                        <option value="ZA"><option value="PTSA"><option value="Tk7">
+                        <option value="E20->E21"><option value="E21->E22">
+                        <option value="E22->E23"><option value="E23->E24"><option value="E20->E22">
+                        <option value="E20->E23"><option value="E20->E24">
+                        <option value="E21->E23"><option value="E21->E24"><option value="E22->E24">
+                    </datalist>
+
+                    <div class="d-flex gap-2 mb-2">
+                        <div class="small" style="color:#88A0BE;flex:1;">
+                            Origen: <span id="originDisplay" style="color:var(--ml-cyan);">—</span><br>
+                            Tamaño: <span id="sizeDisplay" style="color:var(--ml-cyan);">—</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:3px;">
+                            <button class="btn-act" style="background:var(--ml-cyan);color:#fff;" onclick="confirmZone()" id="btnConfirm" disabled>
+                                ✅ OK
+                            </button>
+                            <button class="btn-act" style="background:var(--ml-red);color:#fff;" onclick="cancelDrawing()" id="btnCancel" disabled>
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+
+                    <hr class="my-2" style="border-color:#2A3A57;">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0">📋 Zonas <span id="zoneCount" style="color:#5A6A87;">(0)</span></h6>
+                        <div>
+                            <button class="btn-act" style="background:var(--ml-yellow);color:var(--ml-blue-dark);padding:4px 10px;font-size:11px;" onclick="generateCode()">
+                                📋 Código
+                            </button>
+                            <button class="btn-act" style="background:#3A4A67;color:#fff;padding:4px 10px;font-size:11px;" onclick="clearAll()">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                    <div class="tabla-wrap">
+                        <table>
+                            <thead><tr><th>Zona</th><th>top</th><th>left</th><th>w</th><th>h</th><th></th></tr></thead>
+                            <tbody id="zoneTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const wrapper = document.getElementById('mapWrapper');
+        const drawingRect = document.getElementById('drawingRect');
+        const zoneNameInput = document.getElementById('zoneNameInput');
+        const statusBar = document.getElementById('statusBar');
+        const originDisplay = document.getElementById('originDisplay');
+        const sizeDisplay = document.getElementById('sizeDisplay');
+        const btnConfirm = document.getElementById('btnConfirm');
+        const btnCancel = document.getElementById('btnCancel');
+        const tableBody = document.getElementById('zoneTable');
+        const zoneCount = document.getElementById('zoneCount');
+        const output = document.getElementById('output');
+
+        let zones = [];
+        let isDrawing = false;
+        let startX = 0, startY = 0;
+        let pendingRect = null;
+
+        function getPos(e) {
+            const rect = wrapper.getBoundingClientRect();
+            const cx = e.touches ? e.touches[0].clientX : e.clientX;
+            const cy = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: Math.round(cx - rect.left), y: Math.round(cy - rect.top) };
+        }
+
+        wrapper.addEventListener('mousedown', startDraw);
+
+        function startDraw(e) {
+            if (e.button !== 0) return;
+            const pos = getPos(e);
+            startX = Math.max(0, Math.min(pos.x, 1699));
+            startY = Math.max(0, Math.min(pos.y, 819));
+            isDrawing = true;
+            drawingRect.style.display = 'block';
+            drawingRect.style.left = startX + 'px';
+            drawingRect.style.top = startY + 'px';
+            drawingRect.style.width = '0px';
+            drawingRect.style.height = '0px';
+            pendingRect = null;
+            zoneNameInput.disabled = true;
+            zoneNameInput.placeholder = 'Arrastra para dibujar...';
+            btnConfirm.disabled = true;
+            btnCancel.disabled = false;
+            statusBar.className = 'status-bar status-drawing';
+            statusBar.innerHTML = '🔄 Arrastrando... suelta para definir el rectángulo';
+        }
+
+        wrapper.addEventListener('mousemove', moveDraw);
+
+        function moveDraw(e) {
+            if (!isDrawing) return;
+            const pos = getPos(e);
+            const x = Math.max(0, Math.min(pos.x, 1699));
+            const y = Math.max(0, Math.min(pos.y, 819));
+            const left = Math.min(startX, x);
+            const top = Math.min(startY, y);
+            const w = Math.abs(x - startX);
+            const h = Math.abs(y - startY);
+            drawingRect.style.left = left + 'px';
+            drawingRect.style.top = top + 'px';
+            drawingRect.style.width = w + 'px';
+            drawingRect.style.height = h + 'px';
+            pendingRect = { top, left, width: w, height: h };
+            originDisplay.textContent = `(${left}, ${top})`;
+            sizeDisplay.textContent = `${w} × ${h}`;
+        }
+
+        wrapper.addEventListener('mouseup', endDraw);
+        wrapper.addEventListener('mouseleave', () => { if (isDrawing) cancelDrawing(); });
+
+        function endDraw() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            if (!pendingRect || pendingRect.width < 5 || pendingRect.height < 5) {
+                cancelDrawing();
+                return;
+            }
+            zoneNameInput.disabled = false;
+            zoneNameInput.placeholder = '✏️ Escribe el nombre y presiona Enter';
+            zoneNameInput.value = '';
+            zoneNameInput.focus();
+            btnConfirm.disabled = false;
+            btnCancel.disabled = false;
+            statusBar.className = 'status-bar status-naming';
+            statusBar.innerHTML = '✏️ Escribe el nombre de la zona y presiona Enter';
+        }
+
+        function cancelDrawing() {
+            isDrawing = false;
+            drawingRect.style.display = 'none';
+            pendingRect = null;
+            zoneNameInput.value = '';
+            zoneNameInput.placeholder = 'Arrastra en el mapa para empezar';
+            zoneNameInput.disabled = true;
+            btnConfirm.disabled = true;
+            btnCancel.disabled = true;
+            originDisplay.textContent = '—';
+            sizeDisplay.textContent = '—';
+            statusBar.className = 'status-bar status-ready';
+            statusBar.innerHTML = '🟢 Arrastra sobre el mapa para dibujar un rectángulo';
+        }
+
+        zoneNameInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') confirmZone();
+            if (e.key === 'Escape') cancelDrawing();
+        });
+
+        function confirmZone() {
+            const name = zoneNameInput.value.trim().toUpperCase();
+            if (!name) { alert('Escribe un nombre para la zona'); return; }
+            if (!pendingRect) { alert('Primero dibuja un rectángulo'); return; }
+
+            zones.push({
+                name: name,
+                top: pendingRect.top,
+                left: pendingRect.left,
+                width: pendingRect.width,
+                height: pendingRect.height
+            });
+
+            renderTable();
+            cancelDrawing();
+        }
+
+        function renderTable() {
+            tableBody.innerHTML = '';
+            zoneCount.textContent = `(${zones.length})`;
+            zones.forEach((z, i) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td><strong style="color:var(--ml-cyan);">${z.name}</strong></td>
+                    <td>${z.top}</td><td>${z.left}</td><td>${z.width}</td><td>${z.height}</td>
+                    <td><button onclick="removeZone(${i})" style="background:var(--ml-red);color:#fff;border:none;border-radius:3px;cursor:pointer;padding:1px 8px;font-size:12px;">✕</button></td>`;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        function removeZone(idx) {
+            zones.splice(idx, 1);
+            renderTable();
+        }
+
+        function clearAll() {
+            if (zones.length === 0) return;
+            if (!confirm('¿Eliminar todas las zonas?')) return;
+            zones = [];
+            renderTable();
+            output.style.display = 'none';
+        }
+
+        function generateCode() {
+            if (zones.length === 0) { alert('Dibuja al menos una zona primero'); return; }
+
+            const grouped = {};
+            zones.forEach(z => {
+                if (!grouped[z.name]) grouped[z.name] = [];
+                grouped[z.name].push(z);
+            });
+
+            let lines = [];
+            const names = Object.keys(grouped).sort();
+            names.forEach(name => {
+                const rects = grouped[name];
+                if (rects.length === 1) {
+                    const r = rects[0];
+                    lines.push(`    '${r.name}': [{'top': ${r.top}, 'left': ${r.left}, 'width': ${r.width}, 'height': ${r.height}, 'label': '${r.name}'}],`);
+                } else {
+                    lines.push(`    '${name}': [`);
+                    rects.forEach(r => {
+                        lines.push(`        {'top': ${r.top}, 'left': ${r.left}, 'width': ${r.width}, 'height': ${r.height}, 'label': '${r.name}'},`);
+                    });
+                    lines.push(`    ],`);
+                }
+            });
+            output.textContent = 'ZONE_POSITIONS = {\n' + lines.join('\n') + '\n}';
+            output.style.display = 'block';
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>

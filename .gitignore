@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+
+# Entorno virtual
+venv/
+.venv/
+env/
+
+# Variables de entorno (NUNCA subir esto)
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+flask_output.log
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Base de datos local (si Eventually la exportas)
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+
+# Archivos temporales
+*.tmp
+*.bak
