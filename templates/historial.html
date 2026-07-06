@@ -89,6 +89,7 @@
         <div class="d-flex align-items-center gap-2">
             <a href="/" class="nav-btn">← Panel de Control</a>
             <a href="/mapa" class="nav-btn">🗺️ Mapa</a>
+            <a href="/estadisticas" class="nav-btn">📊 Estadísticas</a>
             <a href="/exportar_historial?fecha_inicio={{ fecha_inicio }}&fecha_fin={{ fecha_fin }}&empresa={{ empresa_seleccionada }}&buscar_texto={{ buscar_texto }}" class="nav-btn primary">📊 Exportar a Excel</a>
         </div>
     </nav>
@@ -133,6 +134,22 @@
                         <label class="form-label-l2">Buscar</label>
                         <input type="text" class="form-control form-control-sm" name="buscar_texto" value="{{ buscar_texto }}" placeholder="Capataz, zona, máquina...">
                     </div>
+                    <div class="col-md-2">
+                        <label class="form-label-l2">Hora Inic. (desde)</label>
+                        <input type="time" class="form-control form-control-sm" name="hora_inicio_desde" value="{{ hora_inicio_desde }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label-l2">Hora Inic. (hasta)</label>
+                        <input type="time" class="form-control form-control-sm" name="hora_inicio_hasta" value="{{ hora_inicio_hasta }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label-l2">Bloque horario</label>
+                        <select class="form-select form-select-sm" name="bloque_horario" onchange="if(this.value){document.querySelectorAll('input[name=hora_inicio_desde],input[name=hora_inicio_hasta]').forEach(i=>i.disabled=true)}else{document.querySelectorAll('input[name=hora_inicio_desde],input[name=hora_inicio_hasta]').forEach(i=>i.disabled=false)}">
+                            <option value="">Manual</option>
+                            <option value="dia" {% if bloque_horario == 'dia' %}selected{% endif %}>Día (05:00-17:00)</option>
+                            <option value="noche" {% if bloque_horario == 'noche' %}selected{% endif %}>Noche (17:00-05:00)</option>
+                        </select>
+                    </div>
                     <div class="col-12 text-end mt-2">
                         <a href="/historial" class="btn btn-sm btn-outline-secondary me-2 fw-bold">Limpiar</a>
                         <button type="submit" class="btn btn-sm btn-ml-cyan px-4">Buscar</button>
@@ -156,6 +173,7 @@
                                 <th>Responsable / ZONA</th>
                                 <th>Vehículo</th>
                                 <th>Personal PCO</th>
+                                <th>Comentario</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -188,6 +206,13 @@
                                     <strong>ATS:</strong> {{ r[16] }}<br>
                                     <strong>SPCO:</strong> {{ r[17] }}
                                 </td>
+                                <td class="small text-start" style="max-width: 220px;">
+                                    {% if r[18] %}
+                                        <div class="bg-light rounded px-2 py-1" style="border-left: 3px solid var(--ml-cyan);">{{ r[18] }}</div>
+                                    {% else %}
+                                        <span class="text-muted fst-italic">—</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <a href="/restaurar/{{ r[0] }}" class="btn btn-sm btn-ml-yellow fw-bold text-nowrap" onclick="return confirm('¿Devolver este registro a la pantalla principal?');">
                                         ↩️ Restaurar
@@ -196,7 +221,7 @@
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="8" class="text-muted py-5 text-center">No se encontraron registros con los filtros aplicados.</td>
+                                <td colspan="9" class="text-muted py-5 text-center">No se encontraron registros con los filtros aplicados.</td>
                             </tr>
                             {% endfor %}
                         </tbody>

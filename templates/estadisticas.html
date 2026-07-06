@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCO L2 · Estadísticas</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --ml-blue: #1B3A6B;
+            --ml-blue-dark: #142A50;
+            --ml-red: #E30613;
+            --ml-yellow: #FFC72C;
+            --ml-cyan: #00A0DC;
+            --ml-gray: #6E7376;
+        }
+        html, body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+        body { background: #F4F6F9; }
+        .navbar-pco {
+            background: linear-gradient(135deg, var(--ml-blue-dark) 0%, var(--ml-blue) 100%);
+            border-bottom: 4px solid var(--ml-red);
+            padding: 0.6rem 1rem;
+            color: #fff;
+        }
+        .nav-btn { background: transparent; color:#fff; border:1px solid rgba(255,255,255,0.25); padding:0.3rem 0.7rem; border-radius:6px; font-weight:600; font-size:0.82rem; cursor:pointer; text-decoration:none; display:inline-block; transition:all 0.2s; }
+        .nav-btn:hover { background:rgba(255,255,255,0.12); color:#fff; text-decoration:none; }
+        .nav-btn.primary { background: var(--ml-red); border-color: var(--ml-red); color:#fff; }
+        .nav-btn.cyan { background: var(--ml-cyan); border-color: var(--ml-cyan); color:#fff; }
+        .card-pco { border:none; box-shadow: 0 2px 6px rgba(0,0,0,0.06); border-radius: 8px; overflow:hidden; }
+        .bg-ml-blue { background: var(--ml-blue)!important; color:#fff; }
+        .bg-ml-cyan { background: var(--ml-cyan)!important; color:#fff; }
+        .bg-ml-red { background: var(--ml-red)!important; color:#fff; }
+        .stat-card { background:#fff; border-radius:8px; padding:1rem 0.8rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border-left:4px solid var(--ml-cyan); }
+        .stat-card .lbl { font-size:0.72rem; color:var(--ml-gray); text-transform:uppercase; letter-spacing:1px; font-weight:700; }
+        .stat-card .val { font-size:1.6rem; font-weight:800; color:var(--ml-blue); margin-top:0.2rem; }
+        .stat-card.dia { border-left-color: var(--ml-yellow); }
+        .stat-card.dia .val { color: #B58A00; }
+        .stat-card.noche { border-left-color: var(--ml-blue); }
+        .stat-card.noche .val { color: var(--ml-blue); }
+        .stat-card.lib { border-left-color: #28a745; }
+        .stat-card.lib .val { color: #28a745; }
+        .stat-card.via { border-left-color: var(--ml-cyan); }
+        .stat-card.via .val { color: var(--ml-cyan); }
+        .stat-card.arch { border-left-color: var(--ml-gray); }
+        .stat-card.arch .val { color: var(--ml-gray); }
+        .chart-container { position:relative; height: 300px; }
+        .form-label-l2 { font-size: 0.74rem; font-weight: 700; color: #37474f; margin-bottom: 0.15rem; }
+        .btn-ml-cyan { background: var(--ml-cyan); color: #fff; border: none; font-weight: 700; }
+        .btn-ml-cyan:hover { background: #007FB0; color: #fff; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar-pco d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge-logo" style="background:#fff;color:var(--ml-blue);font-weight:bolder;padding:3px 9px;border-radius:6px;">M</span>
+        <span class="badge-l2" style="background:var(--ml-red);color:#fff;font-weight:bolder;padding:3px 9px;border-radius:6px;">L2</span>
+        <span style="margin-left:0.35rem;font-weight:600;">PCO · Estadísticas</span>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="/" class="nav-btn">🏠 Inicio</a>
+        <a href="/historial" class="nav-btn">🔍 Historial</a>
+        <a href="/estadisticas" class="nav-btn primary">📊 Estadísticas</a>
+    </div>
+</nav>
+
+<div class="container-fluid py-3">
+
+    <h4 class="mb-3 fw-bold" style="color:var(--ml-blue);">📊 Dashboard de Estadísticas del Historial</h4>
+
+    <!-- FILTROS -->
+    <div class="card card-pco mb-3" style="border-left:4px solid var(--ml-cyan);">
+        <div class="card-header bg-ml-cyan" style="color:#fff;">🎛️ Filtros del Período</div>
+        <div class="card-body py-2">
+            <form action="/estadisticas" method="GET" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label-l2">Fecha inicial</label>
+                    <input type="date" class="form-control form-control-sm" name="fecha_inicio" value="{{ fecha_inicio }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label-l2">Fecha final</label>
+                    <input type="date" class="form-control form-control-sm" name="fecha_fin" value="{{ fecha_fin }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label-l2">Turno</label>
+                    <select class="form-select form-select-sm" name="turno">
+                        <option value="" {% if not turno_filtro %}selected{% endif %}>Ambos turnos</option>
+                        <option value="dia" {% if turno_filtro == 'dia' %}selected{% endif %}>Día (05:00 - 17:00)</option>
+                        <option value="noche" {% if turno_filtro == 'noche' %}selected{% endif %}>Noche (17:00 - 05:00)</option>
+                    </select>
+                </div>
+                <div class="col-md-3 text-end">
+                    <a href="/estadisticas" class="btn btn-sm btn-outline-secondary me-1 fw-bold">Limpiar</a>
+                    <button type="submit" class="btn btn-sm btn-ml-cyan text-white fw-bold">Aplicar Filtro</button>
+                </div>
+            </form>
+            {% if fecha_inicio or fecha_fin or turno_filtro %}
+            <div class="small text-muted mt-2 mb-0">
+                <strong>Filtro activo:</strong>
+                {% if fecha_inicio %}Desde {{ fecha_inicio }} {% endif %}{% if fecha_fin %}Hasta {{ fecha_fin }} {% endif %}
+                {% if turno_filtro == 'dia' %}· Turno Día (5-17){% elif turno_filtro == 'noche' %}· Turno Noche (17-5){% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- TARJETAS -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-2 col-sm-6">
+            <div class="stat-card">
+                <div class="lbl">Total registros</div>
+                <div class="val">{{ total_reg }}</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="stat-card dia">
+                <div class="lbl">Turno Día (5-17)</div>
+                <div class="val">{{ total_dia }}</div>
+                <small class="text-muted">05:00 - 17:00</small>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="stat-card noche">
+                <div class="lbl">Turno Noche (17-5)</div>
+                <div class="val">{{ total_noche }}</div>
+                <small class="text-muted">17:00 - 05:00</small>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="stat-card via">
+                <div class="lbl">Actualmente en vía</div>
+                <div class="val">{{ total_via }}</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="stat-card lib">
+                <div class="lbl">Liberados</div>
+                <div class="val">{{ total_lib }}</div>
+            </div>
+        </div>
+        <div class="col-md-2 col-sm-6">
+            <div class="stat-card arch">
+                <div class="lbl">Archivados</div>
+                <div class="val">{{ total_archivados }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GRAFICO PRINCIPAL: Trabajos por dia, desglosado por turno dia/noche -->
+    <div class="row g-3 mb-3">
+        <div class="col-12">
+            <div class="card card-pco">
+                <div class="card-header bg-ml-blue">📈 Trabajos Ingresados por Día · Turno Día (5-17) vs Noche (17-5)</div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 340px;">
+                        <canvas id="chartPorDiaTurno"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GRAFICOS SECUNDARIOS -->
+    <div class="row g-3">
+        <div class="col-md-6">
+            <div class="card card-pco">
+                <div class="card-header bg-ml-cyan">🏢 Top 5 Empresas con más trabajos</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartEmpresas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card card-pco">
+                <div class="card-header" style="background: var(--ml-red); color:#fff;">👥 Top 5 Responsables</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartResponsables"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Distribucion turno dia vs noche + Estados -->
+    <div class="row g-3 mt-1">
+        <div class="col-md-6">
+            <div class="card card-pco">
+                <div class="card-header bg-ml-cyan">🌓 Distribución Día vs Noche</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartBloques"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card card-pco">
+                <div class="card-header bg-ml-blue">🚦 Estado de Trabajos (En Vía vs Liberados)</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartEstados"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nuevos: dia de la semana + zonas -->
+    <div class="row g-3 mt-1">
+        <div class="col-md-6">
+            <div class="card card-pco">
+                <div class="card-header" style="background: var(--ml-yellow); color: var(--ml-blue);">📅 Trabajos por Día de la Semana (Lun-Dom)</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartDiaSemana"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card card-pco">
+                <div class="card-header bg-ml-blue">📍 Top 5 Zonas Más Trabajadas</div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="chartZonas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duracion promedio en via -->
+    <div class="row g-3 mt-1 mb-1">
+        <div class="col-md-6 offset-md-3">
+            <div class="stat-card" style="border-left-color:#28a745;">
+                <div class="lbl">⏱️ Duración promedio en vía</div>
+                <div class="val" style="color:#28a745;">
+                    {{ '%.1f'|format(promedio_duracion_min) }} min
+                </div>
+                <small class="text-muted">Solo trabajos liberados (con hora_inicio y hora_fin)</small>
+            </div>
+        </div>
+    </div>
+
+    <p class="text-muted small mt-3 text-center">
+        Datos consultados en vivo desde la base de datos Neon.
+    </p>
+</div>
+
+<script>
+    const colors = {
+        blue: 'rgba(27, 58, 107, 0.85)',
+        cyan: 'rgba(0, 160, 220, 0.85)',
+        red:   'rgba(227, 6, 19, 0.85)',
+        yellow:'rgba(255, 199, 44, 0.85)',
+        green: 'rgba(40, 167, 69, 0.85)',
+        gray:  'rgba(110, 115, 118, 0.85)',
+    };
+
+    // 1) Trabajos por dia, desglosado por turno dia/noche (barras apiladas)
+    new Chart(document.getElementById('chartPorDiaTurno'), {
+        type: 'bar',
+        data: {
+            labels: {{ dias_turno_labels|tojson }},
+            datasets: [
+                {
+                    label: 'Turno Día (05:00-17:00)',
+                    data: {{ dias_dia_data|tojson }},
+                    backgroundColor: colors.yellow,
+                    borderColor: colors.yellow,
+                    borderWidth: 1,
+                    stack: 'turno'
+                },
+                {
+                    label: 'Turno Noche (17:00-05:00)',
+                    data: {{ dias_noche_data|tojson }},
+                    backgroundColor: colors.blue,
+                    borderColor: colors.blue,
+                    borderWidth: 1,
+                    stack: 'turno'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, stacked: true, ticks: { stepSize: 1, precision: 0 } },
+                x: { stacked: true, ticks: { maxRotation: 45, minRotation: 45 } }
+            },
+            plugins: { legend: { position: 'top' } }
+        }
+    });
+
+    // 2) Top empresas
+    new Chart(document.getElementById('chartEmpresas'), {
+        type: 'bar',
+        data: {
+            labels: {{ empresas_labels|tojson }},
+            datasets: [{
+                label: 'Trabajos',
+                data: {{ empresas_data|tojson }},
+                backgroundColor: [colors.blue, colors.cyan, colors.red, colors.yellow, colors.green],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+        }
+    });
+
+    // 3) Top responsables
+    new Chart(document.getElementById('chartResponsables'), {
+        type: 'bar',
+        data: {
+            labels: {{ respon_labels|tojson }},
+            datasets: [{
+                label: 'Trabajos',
+                data: {{ respon_data|tojson }},
+                backgroundColor: [colors.red, colors.yellow, colors.cyan, colors.blue, colors.gray],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+        }
+    });
+
+    // 4) Bloque dia/noche (donut)
+    new Chart(document.getElementById('chartBloques'), {
+        type: 'doughnut',
+        data: {
+            labels: ['Día (05-17)', 'Noche (17-05)'],
+            datasets: [{
+                data: [{{ total_dia }}, {{ total_noche }}],
+                backgroundColor: [colors.yellow, colors.blue],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    });
+
+    // 5) Estado en via vs liberado (donut)
+    new Chart(document.getElementById('chartEstados'), {
+        type: 'doughnut',
+        data: {
+            labels: ['En Vía', 'Liberado'],
+            datasets: [{
+                data: [{{ total_via }}, {{ total_lib }}],
+                backgroundColor: [colors.cyan, colors.green],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+    });
+
+    // 6) Trabajos por dia de la semana (Lun-Dom)
+    new Chart(document.getElementById('chartDiaSemana'), {
+        type: 'bar',
+        data: {
+            labels: {{ dias_semana_labels|tojson }},
+            datasets: [{
+                label: 'Trabajos',
+                data: {{ dias_semana_data|tojson }},
+                backgroundColor: colors.yellow,
+                borderColor: '#B58A00',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+        }
+    });
+
+    // 7) Top 5 zonas mas trabajadas
+    new Chart(document.getElementById('chartZonas'), {
+        type: 'bar',
+        data: {
+            labels: {{ zonas_labels|tojson }},
+            datasets: [{
+                label: 'Trabajos',
+                data: {{ zonas_data|tojson }},
+                backgroundColor: [colors.blue, colors.cyan, colors.red, colors.gray, colors.green],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { stepSize: 1, precision: 0 } } }
+        }
+    });
+</script>
+
+<!-- Footer discreto - acceso admin -->
+<div style="position:fixed;bottom:4px;left:6px;z-index:1000;opacity:0.18;transition:opacity 0.3s;" onmouseover="this.style.opacity='0.55'" onmouseout="this.style.opacity='0.18'">
+    <a href="/admin" title="" style="text-decoration:none;color:#6c757d;font-size:9px;letter-spacing:0.5px;">·</a>
+</div>
+
+</body>
+</html>

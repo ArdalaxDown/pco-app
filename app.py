@@ -260,7 +260,7 @@ def index():
         SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona, 
                num_personas, vaf_tren, conductor, tetra, hora_inicio, hora_fin, 
                operador_turno, spco_turno, estado, 
-               usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo
+               usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario
         FROM seguimiento_vias 
         WHERE archivado = FALSE AND (fecha = CURRENT_DATE OR estado = 'En Vía')
         ORDER BY (hora_fin IS NOT NULL) ASC, hora_inicio DESC;
@@ -417,6 +417,7 @@ def ingresar():
         ubicacion_zona = request.form['ubicacion_zona']
         num_personas = request.form['num_personas'] or 0
         tetra = request.form['tetra']
+        comentario = request.form.get('comentario', '').strip()
 
         usa_vehiculo = True if request.form.get('usa_vehiculo') == 'si' else False
         tipo_vehiculo = request.form.get('tipo_vehiculo', '')
@@ -458,9 +459,9 @@ def ingresar():
         # --- SI NO HAY PELIGRO, SE INSERTA NORMAL ---
         cur.execute("""
             INSERT INTO seguimiento_vias 
-            (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'En Vía', %s, %s, %s, %s);
-        """, (turno, operador, spco, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo))
+            (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'En Vía', %s, %s, %s, %s, %s);
+        """, (turno, operador, spco, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario))
         conn.commit()
         cur.close()
         conn.close()
@@ -544,6 +545,7 @@ def editar(id):
         ubicacion_zona = request.form['ubicacion_zona']
         num_personas = request.form['num_personas'] or 0
         tetra = request.form['tetra']
+        comentario = request.form.get('comentario', '').strip()
         
         usa_vehiculo = True if request.form.get('usa_vehiculo') == 'si' else False
         tipo_vehiculo = request.form.get('tipo_vehiculo', '') if usa_vehiculo else ''
@@ -565,9 +567,10 @@ def editar(id):
                 UPDATE seguimiento_vias 
                 SET empresa = %s, orden_trabajo = %s, responsable = %s, ubicacion_zona = %s, num_personas = %s, 
                     tetra = %s, hora_inicio = %s, hora_fin = %s, estado = %s,
-                    usa_vehiculo = %s, tipo_vehiculo = %s, codigo_vehiculo = %s, conductor_vehiculo = %s
+                    usa_vehiculo = %s, tipo_vehiculo = %s, codigo_vehiculo = %s, conductor_vehiculo = %s,
+                    comentario = %s
                 WHERE id = %s;
-            """, (empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, hora_inicio, hora_fin, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, id))
+            """, (empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, hora_inicio, hora_fin, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario, id))
             conn.commit()
             flash('Registro actualizado correctamente.', 'success')
         except (OperationalError, DatabaseError) as e:
@@ -660,12 +663,21 @@ def historial():
     fecha_fin = request.args.get('fecha_fin', '')
     empresa = request.args.get('empresa', '')
     buscar_texto = request.args.get('buscar_texto', '')
+    hora_inicio_desde = request.args.get('hora_inicio_desde', '')
+    hora_inicio_hasta = request.args.get('hora_inicio_hasta', '')
+    bloque_horario = request.args.get('bloque_horario', '')
+
+    # Resolucion de bloque horario a rango de horas
+    if bloque_horario == 'dia':
+        hora_inicio_desde, hora_inicio_hasta = '05:00', '17:00'
+    elif bloque_horario == 'noche':
+        hora_inicio_desde, hora_inicio_hasta = '17:00', '05:00'
 
     query = """
         SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona, 
                num_personas, tetra, hora_inicio, hora_fin, estado, 
                usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo,
-               operador_turno, spco_turno
+               operador_turno, spco_turno, comentario
         FROM seguimiento_vias 
         WHERE 1=1
     """
@@ -684,6 +696,16 @@ def historial():
         query += " AND (responsable ILIKE %s OR ubicacion_zona ILIKE %s OR codigo_vehiculo ILIKE %s OR conductor_vehiculo ILIKE %s)"
         term = f"%{buscar_texto}%"
         params.extend([term, term, term, term])
+    if hora_inicio_desde and hora_inicio_hasta and hora_inicio_desde <= hora_inicio_hasta:
+        # Rango simple dentro del mismo dia: 05:00 a 17:00
+        query += " AND hora_inicio >= %s AND hora_inicio <= %s"
+        params.append(hora_inicio_desde)
+        params.append(hora_inicio_hasta)
+    elif hora_inicio_desde and hora_inicio_hasta and hora_inicio_desde > hora_inicio_hasta:
+        # Rango que cruza medianoche: 17:00 a 05:00 del dia siguiente
+        query += " AND (hora_inicio >= %s OR hora_inicio <= %s)"
+        params.append(hora_inicio_desde)
+        params.append(hora_inicio_hasta)
 
     query += " ORDER BY fecha DESC, hora_inicio DESC;"
 
@@ -704,7 +726,10 @@ def historial():
                            fecha_inicio=fecha_inicio,
                            fecha_fin=fecha_fin,
                            empresa_seleccionada=empresa,
-                           buscar_texto=buscar_texto)
+                           buscar_texto=buscar_texto,
+                           hora_inicio_desde=hora_inicio_desde,
+                           hora_inicio_hasta=hora_inicio_hasta,
+                           bloque_horario=bloque_horario)
 
 @app.route('/exportar_historial')
 def exportar_historial():
@@ -843,26 +868,112 @@ def importar_excel():
     wb = openpyxl.load_workbook(file)
     ws = wb.active
 
+    # ====== DETECCIÓN AUTOMÁTICA DE CABECERAS (fila con "ESTADO") ======
+    # Busca la fila que contiene la cabecera y mapea columnas dinámicamente,
+    # para soportar cualquier variación del orden de columnas del Excel origen.
+    def _norm_txt(s):
+        if s is None:
+            return ''
+        if not isinstance(s, str):
+            s = str(s)
+        s = s.strip().upper()
+        s = s.replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U').replace('Ñ', 'N')
+        s = re.sub(r'\s+', ' ', s)
+        return s
+
+    CABECERAS_XLSX = {
+        'ESTADO': 'estado',
+        'SPCO QUE VALIDA': 'spco',
+        'SEGUIMIENTO (NOMBRE OPCO)': 'operador',
+        'SEGUIMIENTO (NOMBRE OPC)': 'operador',
+        'ORDEN DE TRABAJO': 'orden_trabajo',
+        'EMPRESA CONTRATISTA': 'empresa',
+        'ACCESO A VÍA': 'acceso',
+        'ACCESO A VIA': 'acceso',
+        'DESDE': 'desde',
+        'HASTA': 'hasta',
+        'RESPONSABLE DE TRABAJOS': 'responsable',
+        'CELULAR Y TETRA EXT': 'celular_tetra',
+        # Comentario del permiso: dos posibles cabeceras (en orden de preferencia)
+        'REQUERIMIENTOS ADICIONALES / COMENTARIOS': 'comentario',
+        'REQUERIMIENTOS ADICIONALE': 'comentario',
+        'REQUERIMENTOS ADICIONALES / COMENTARIOS': 'comentario',
+        'COMENTARIOS DEL PCO': 'comentario_pco',
+    }
+
+    fila_cabecera = None
+    col_idx = {}
+    max_filas_buscar = min(ws.max_row, 15)
+    for r in range(1, max_filas_buscar + 1):
+        valores_normalizados = [_norm_txt(ws.cell(row=r, column=c).value) for c in range(1, 32)]
+        if 'ESTADO' in valores_normalizados or 'ESTADO ' in [v + ' ' for v in valores_normalizados]:
+            for c_idx, val in enumerate(valores_normalizados, 1):
+                if val in CABECERAS_XLSX:
+                    campo = CABECERAS_XLSX[val]
+                    # columna 23 ("REQUERIMIENTOS") tiene prioridad sobre columna 8 ("COMENTARIOS PCO")
+                    if campo == 'comentario':
+                        if 'comentario' not in col_idx:
+                            col_idx['comentario'] = c_idx
+                    elif campo == 'comentario_pco':
+                        if 'comentario_pco' not in col_idx:
+                            col_idx['comentario_pco'] = c_idx
+                    else:
+                        col_idx[campo] = c_idx
+            fila_cabecera = r
+            break
+
+    if fila_cabecera is None:
+        # Fallback al mapeo posicional histórico (companibilidad hacia atras)
+        fila_cabecera = 5
+        col_idx = {
+            'estado': 2, 'spco': 3, 'operador': 5, 'orden_trabajo': 10,
+            'empresa': 15, 'acceso': 17, 'desde': 21, 'hasta': 22,
+            'responsable': 26, 'celular_tetra': 27,
+            'comentario': 23, 'comentario_pco': 8,
+        }
+
+    fila_inicio_datos = fila_cabecera + 1
+
     datos = []
-    for row in range(6, ws.max_row + 1):
-        estado = ws.cell(row=row, column=2).value or ''
-        acceso = ws.cell(row=row, column=17).value or ''
+    for row in range(fila_inicio_datos, ws.max_row + 1):
+        def _get(campo):
+            idx = col_idx.get(campo)
+            if idx is None or idx > ws.max_column:
+                return ''
+            v = ws.cell(row=row, column=idx).value
+            return v if v is not None else ''
 
-        if str(estado).strip().upper() != 'CONFIRMADA':
+        estado_val = _get('estado')
+        acceso_val = _get('acceso')
+
+        if str(estado_val).strip().upper() != 'CONFIRMADA':
             continue
-        if str(acceso).strip().upper() != 'SI':
+        if str(acceso_val).strip().upper() != 'SI':
             continue
 
-        spco = ws.cell(row=row, column=3).value or ''
-        operador = ws.cell(row=row, column=5).value or ''
-        desde = ws.cell(row=row, column=21).value or ''
-        hasta = ws.cell(row=row, column=22).value or ''
-        responsable = ws.cell(row=row, column=26).value or ''
-        celular_tetra = ws.cell(row=row, column=27).value or ''
-        orden_trabajo = ws.cell(row=row, column=10).value or ''
-        empresa = ws.cell(row=row, column=15).value or ''
+        spco = _get('spco')
+        operador = _get('operador')
+        desde = _get('desde')
+        hasta = _get('hasta')
+        responsable = _get('responsable')
+        celular_tetra = _get('celular_tetra')
+        orden_trabajo = _get('orden_trabajo')
+        empresa = _get('empresa')
 
         tetra = extract_tetra(celular_tetra)
+
+        # Comentario del permiso de trabajo:
+        # Prioridad 1: "REQUERIMIENTOS ADICIONALES / COMENTARIOS" (col 23, más descriptivo)
+        # Prioridad 2: "COMENTARIOS DEL PCO" (col 8, suele venir vacío)
+        # Si ambos existen y el principal está vacío, usar el secundario.
+        comentario_permiso = ''
+        if 'comentario' in col_idx:
+            comentario_permiso = str(_get('comentario')).strip()
+        if not comentario_permiso and 'comentario_pco' in col_idx:
+            comentario_permiso = str(_get('comentario_pco')).strip()
+        # Limpieza: si solo trae un nbsp o类似的
+        if comentario_permiso in ('\\xa0', '\xa0', 'N/A', 'n/a'):
+            comentario_permiso = ''
 
         datos.append({
             'spco': str(spco).strip(),
@@ -873,6 +984,7 @@ def importar_excel():
             'tetra': tetra,
             'orden_trabajo': str(orden_trabajo).strip(),
             'empresa': str(empresa).strip(),
+            'comentario': comentario_permiso,
         })
 
     wb.close()
@@ -913,10 +1025,8 @@ def importar_texto():
         'ESTADO': 'estado',
         'SPCO QUE VALIDA': 'spco',
         'SEGUIMIENTO (NOMBRE OPCO)': 'operador',
-        'SEGUIMIENTO (NOMBRE OPCO)': 'operador',
+        'SEGUIMIENTO (NOMBRE OPC)': 'operador',
         'ORDEN DE TRABAJO': 'orden_trabajo',
-        'ORDEN DE TRABAJO': 'orden_trabajo',
-        'EMPRESA CONTRATISTA': 'empresa',
         'EMPRESA CONTRATISTA': 'empresa',
         'ACCESO A VÍA': 'acceso',
         'ACCESO A VIA': 'acceso',
@@ -924,6 +1034,11 @@ def importar_texto():
         'HASTA': 'hasta',
         'RESPONSABLE DE TRABAJOS': 'responsable',
         'CELULAR Y TETRA EXT': 'celular_tetra',
+        # Comentario del permiso (con prioridad para el más descriptivo)
+        'REQUERIMIENTOS ADICIONALES / COMENTARIOS': 'comentario',
+        'REQUERIMIENTOS ADICIONALE': 'comentario',
+        'REQUERIMENTOS ADICIONALES / COMENTARIOS': 'comentario',
+        'COMENTARIOS DEL PCO': 'comentario_pco',
     }
 
     def norm(s):
@@ -991,6 +1106,14 @@ def importar_texto():
             celular = getcampo('celular_tetra')
             tetra = extract_tetra(celular)
 
+            comentario_permiso = ''
+            if 'comentario' in cabecera_idx:
+                comentario_permiso = getcampo('comentario').strip()
+            if not comentario_permiso and 'comentario_pco' in cabecera_idx:
+                comentario_permiso = getcampo('comentario_pco').strip()
+            if comentario_permiso in ('\xa0', 'N/A', 'n/a'):
+                comentario_permiso = ''
+
             datos.append({
                 'spco': getcampo('spco'),
                 'operador': getcampo('operador'),
@@ -1000,6 +1123,7 @@ def importar_texto():
                 'tetra': tetra,
                 'orden_trabajo': getcampo('orden_trabajo'),
                 'empresa': getcampo('empresa'),
+                'comentario': comentario_permiso,
             })
 
     if not datos:
@@ -1043,6 +1167,10 @@ def _parsear_fila_fija(fila):
     responsable = (fila[19] if len(fila) > 19 else '') or ''
     celular_tetra = (fila[20] if len(fila) > 20 else '') or ''
     tetra = extract_tetra(celular_tetra)
+    # REQUERIMIENTOS ADICIONALES / COMENTARIOS era col 23 (index 22) en el Excel
+    comentario = (fila[22] if len(fila) > 22 else '') or ''
+    if str(comentario).strip() in ('\xa0', 'N/A', 'n/a'):
+        comentario = ''
     return {
         'spco': str(spco).strip(),
         'operador': str(operador).strip(),
@@ -1052,6 +1180,7 @@ def _parsear_fila_fija(fila):
         'tetra': tetra,
         'orden_trabajo': str(orden_trabajo).strip(),
         'empresa': str(empresa).strip(),
+        'comentario': str(comentario).strip(),
     }
 
 
@@ -1074,6 +1203,7 @@ def confirmar_importado():
     hasta = item.get('hasta', '')
     zona = f"{desde} -> {hasta}" if desde and hasta else (desde or hasta)
     tetra = item.get('tetra', '')
+    comentario = item.get('comentario', '')
 
     hora_inicio_str = data.get('hora_inicio', '')
     hora_inicio = datetime.strptime(hora_inicio_str, "%H:%M:%S").time() if hora_inicio_str else None
@@ -1082,10 +1212,10 @@ def confirmar_importado():
     cur = conn.cursor()
     cur.execute("""
         INSERT INTO seguimiento_vias 
-        (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, hora_inicio, estado)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, %s, 'En Vía')
+        (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, hora_inicio, estado, comentario)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, %s, 'En Vía', %s)
         RETURNING id;
-    """, (turno, operador, spco, empresa, orden_trabajo, responsable, zona, tetra, hora_inicio))
+    """, (turno, operador, spco, empresa, orden_trabajo, responsable, zona, tetra, hora_inicio, comentario))
     new_id = cur.fetchone()[0]
     conn.commit()
     cur.close()
@@ -1097,7 +1227,7 @@ def confirmar_importado():
         pendientes.pop(idx)
         session['importados_pendientes'] = pendientes
 
-    return jsonify({'success': True, 'id': new_id, 'empresa': empresa})
+    return jsonify({'success': True, 'id': new_id, 'empresa': empresa, 'comentario': comentario})
 
 
 @app.route('/revertir_importado/<int:id>')
@@ -1105,7 +1235,7 @@ def revertir_importado(id):
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, tetra
+        SELECT operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, tetra, comentario
         FROM seguimiento_vias WHERE id = %s;
     """, (id,))
     row = cur.fetchone()
@@ -1114,7 +1244,7 @@ def revertir_importado(id):
         conn.close()
         return jsonify({'error': 'No encontrado'}), 404
 
-    operador, spco, empresa, orden_trabajo, responsable, zona, tetra = row
+    operador, spco, empresa, orden_trabajo, responsable, zona, tetra, comentario = row
 
     cur.execute("DELETE FROM seguimiento_vias WHERE id = %s;", (id,))
     conn.commit()
@@ -1133,6 +1263,7 @@ def revertir_importado(id):
         'tetra': tetra or '',
         'orden_trabajo': orden_trabajo or '',
         'empresa': empresa or '',
+        'comentario': comentario or '',
     }
 
     pendientes = session.get('importados_pendientes', [])
@@ -1152,6 +1283,216 @@ def admin_verificar_pin(pin):
     if not pin:
         return False
     return pin.strip() == ADMIN_PIN
+
+
+@app.route('/estadisticas')
+def estadisticas():
+    """Dashboard de estadisticas del historial.
+    Calcula trabajos por dia, turno (dia/noche), top empresas/responsables,
+    ratio liberados vs en via. Compatible con Chart.js (sin libs extra).
+
+    Acepta filtros opcionales por query string:
+      - fecha_inicio / fecha_fin (rango de fechas)
+      - turno: 'dia' (5-17), 'noche' (17-5) o '' (ambos)
+    """
+    fecha_inicio = request.args.get('fecha_inicio', '')
+    fecha_fin = request.args.get('fecha_fin', '')
+    turno_filtro = request.args.get('turno', '')
+
+    # Construir cláusulas WHERE dinámicas
+    where_clauses = []
+    params = []
+    if fecha_inicio:
+        where_clauses.append("fecha >= %s")
+        params.append(fecha_inicio)
+    if fecha_fin:
+        where_clauses.append("fecha <= %s")
+        params.append(fecha_fin)
+    # Filtro por turno según hora_inicio
+    if turno_filtro == 'dia':
+        where_clauses.append("hora_inicio IS NOT NULL AND hora_inicio::time >= '05:00'::time AND hora_inicio::time < '17:00'::time")
+    elif turno_filtro == 'noche':
+        where_clauses.append("hora_inicio IS NOT NULL AND (hora_inicio::time >= '17:00'::time OR hora_inicio::time < '05:00'::time)")
+
+    # Helper: produces the WHERE clause for SQL, optionally appending extra conditions
+    def build_where(extra_conds=None, extra_params=None):
+        conds = list(where_clauses)
+        ps = list(params)
+        if extra_conds:
+            conds.extend(extra_conds)
+        if extra_params:
+            ps.extend(extra_params)
+        if not conds:
+            return "", tuple(ps)
+        return (" WHERE " + " AND ".join(conds)), tuple(ps)
+
+    where_sql = build_where()[0]
+
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # 1) Trabajos por dia (aplicando filtros)
+        cur.execute(f"""
+            SELECT fecha, COUNT(*) AS total
+            FROM seguimiento_vias{where_sql}
+            GROUP BY fecha
+            ORDER BY fecha ASC;
+        """, tuple(params))
+        por_dia_raw = cur.fetchall()
+        dias_labels = [str(r[0]) for r in por_dia_raw]
+        dias_data = [int(r[1]) for r in por_dia_raw]
+
+        # 1.b) Trabajos por dia DESGLOSADO por turno (dia/noche) - barras apiladas
+        cur.execute(f"""
+            SELECT fecha,
+                   SUM(CASE WHEN hora_inicio IS NOT NULL
+                             AND hora_inicio::time >= '05:00'::time
+                             AND hora_inicio::time < '17:00'::time THEN 1 ELSE 0 END) AS dia,
+                   SUM(CASE WHEN hora_inicio IS NOT NULL
+                             AND (hora_inicio::time >= '17:00'::time
+                                  OR hora_inicio::time < '05:00'::time) THEN 1 ELSE 0 END) AS noche
+            FROM seguimiento_vias{where_sql}
+            GROUP BY fecha
+            ORDER BY fecha ASC;
+        """, tuple(params))
+        por_dia_turno_raw = cur.fetchall()
+        dias_turno_labels = [str(r[0]) for r in por_dia_turno_raw]
+        dias_dia_data = [int(r[1] or 0) for r in por_dia_turno_raw]
+        dias_noche_data = [int(r[2] or 0) for r in por_dia_turno_raw]
+
+        # 2) Turno dia vs noche (segun hora_inicio: 05:00-17:00 = dia; resto = noche)
+        cur.execute(f"""
+            SELECT
+                CASE WHEN hora_inicio IS NOT NULL
+                          AND hora_inicio::time >= '05:00'::time
+                          AND hora_inicio::time < '17:00'::time
+                     THEN 'Dia (05-17)' ELSE 'Noche (17-05)' END AS bloque,
+                COUNT(*) AS total
+            FROM seguimiento_vias{where_sql}
+            GROUP BY bloque;
+        """, tuple(params))
+        bloques = {'Dia (05-17)': 0, 'Noche (17-05)': 0}
+        for r in cur.fetchall():
+            bloques[r[0]] = int(r[1])
+
+        # 3) Top 5 empresas por cantidad
+        where_emp, params_emp = build_where(["empresa IS NOT NULL", "empresa <> ''"])
+        cur.execute(f"""
+            SELECT empresa, COUNT(*) AS total
+            FROM seguimiento_vias{where_emp}
+            GROUP BY empresa
+            ORDER BY total DESC
+            LIMIT 5;
+        """, params_emp)
+        por_empresa_raw = cur.fetchall()
+        empresas_labels = [r[0] for r in por_empresa_raw]
+        empresas_data = [int(r[1]) for r in por_empresa_raw]
+
+        # 4) Top 5 responsables
+        where_resp, params_resp = build_where(["responsable IS NOT NULL", "responsable <> ''"])
+        cur.execute(f"""
+            SELECT responsable, COUNT(*) AS total
+            FROM seguimiento_vias{where_resp}
+            GROUP BY responsable
+            ORDER BY total DESC
+            LIMIT 5;
+        """, params_resp)
+        por_responsable_raw = cur.fetchall()
+        respon_labels = [r[0] for r in por_responsable_raw]
+        respon_data = [int(r[1]) for r in por_responsable_raw]
+
+        # 5) Estado (liberados vs en via)
+        cur.execute(f"""
+            SELECT estado, COUNT(*) FROM seguimiento_vias{where_sql}
+            GROUP BY estado;
+        """, tuple(params))
+        estados = {'En Vía': 0, 'Liberado': 0}
+        for r in cur.fetchall():
+            estados[r[0]] = int(r[1])
+
+        # 6) Trabajos por día de la semana (Lun..Dom) — útil para mapear histórico
+        cur.execute(f"""
+            SELECT TO_CHAR(fecha, 'DY') AS dia_sem, COUNT(*) AS total
+            FROM seguimiento_vias{where_sql}
+            GROUP BY dia_sem
+            ORDER BY CASE dia_sem
+                WHEN 'MON' THEN 1 WHEN 'TUE' THEN 2 WHEN 'WED' THEN 3
+                WHEN 'THU' THEN 4 WHEN 'FRI' THEN 5 WHEN 'SAT' THEN 6
+                WHEN 'SUN' THEN 7 ELSE 8 END;
+        """, tuple(params))
+        dias_semana_map = {'MON':'Lun','TUE':'Mar','WED':'Mié','THU':'Jue','FRI':'Vie','SAT':'Sáb','SUN':'Dom'}
+        dias_semana_labels = []
+        dias_semana_data = []
+        for r in cur.fetchall():
+            dias_semana_labels.append(dias_semana_map.get(r[0], r[0]))
+            dias_semana_data.append(int(r[1]))
+
+        # 7) Duración promedio en vía (en minutos), solo de trabajos liberados
+        where_dur, params_dur = build_where(["hora_inicio IS NOT NULL", "hora_fin IS NOT NULL"])
+        cur.execute(f"""
+            SELECT AVG(EXTRACT(EPOCH FROM (hora_fin - hora_inicio)) / 60) AS prom_min
+            FROM seguimiento_vias{where_dur}
+        """, params_dur)
+        prom_min_row = cur.fetchone()
+        promedio_duracion_min = float(prom_min_row[0]) if prom_min_row and prom_min_row[0] is not None else 0.0
+
+        # 8) Top 5 zonas más trabajadas
+        where_zona, params_zona = build_where(["ubicacion_zona IS NOT NULL", "ubicacion_zona <> ''"])
+        cur.execute(f"""
+            SELECT ubicacion_zona, COUNT(*) AS total
+            FROM seguimiento_vias{where_zona}
+            GROUP BY ubicacion_zona
+            ORDER BY total DESC
+            LIMIT 5;
+        """, params_zona)
+        por_zona_raw = cur.fetchall()
+        zonas_labels = [r[0] for r in por_zona_raw]
+        zonas_data = [int(r[1]) for r in por_zona_raw]
+
+        # Totales
+        total_reg = sum(estados.values())
+        total_dia = bloques['Dia (05-17)']
+        total_noche = bloques['Noche (17-05)']
+        cur.execute(f"SELECT COUNT(*) FROM seguimiento_vias{where_sql};", tuple(params))
+        total_archivados = cur.fetchone()[0]
+
+    except (OperationalError, DatabaseError) as e:
+        app.logger.error(f"estadisticas DB error: {e}")
+        dias_labels, dias_data = [], []
+        dias_turno_labels, dias_dia_data, dias_noche_data = [], [], []
+        bloques = {'Dia (05-17)': 0, 'Noche (17-05)': 0}
+        empresas_labels, empresas_data = [], []
+        respon_labels, respon_data = [], []
+        estados = {'En Vía': 0, 'Liberado': 0}
+        total_reg, total_dia, total_noche, total_archivados = 0, 0, 0, 0
+        dias_semana_labels, dias_semana_data = [], []
+        promedio_duracion_min = 0.0
+        zonas_labels, zonas_data = [], []
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+    return render_template('estadisticas.html',
+        dias_labels=dias_labels, dias_data=dias_data,
+        dias_turno_labels=dias_turno_labels, dias_dia_data=dias_dia_data, dias_noche_data=dias_noche_data,
+        bloques=bloques,
+        total_dia=total_dia, total_noche=total_noche,
+        empresas_labels=empresas_labels, empresas_data=empresas_data,
+        respon_labels=respon_labels, respon_data=respon_data,
+        estados=estados,
+        total_reg=total_reg,
+        total_archivados=total_archivados,
+        total_lib=int(estados.get('Liberado', 0)),
+        total_via=int(estados.get('En Vía', 0)),
+        dias_semana_labels=dias_semana_labels, dias_semana_data=dias_semana_data,
+        promedio_duracion_min=promedio_duracion_min,
+        zonas_labels=zonas_labels, zonas_data=zonas_data,
+        fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, turno_filtro=turno_filtro)
 
 
 @app.route('/admin')
@@ -1184,7 +1525,7 @@ def admin_panel():
             SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona,
                    num_personas, tetra, hora_inicio, hora_fin, estado,
                    usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo,
-                   operador_turno, spco_turno, archivado
+                   operador_turno, spco_turno, archivado, comentario
             FROM seguimiento_vias
             ORDER BY fecha DESC, id DESC;
         """, )
@@ -1199,6 +1540,29 @@ def admin_panel():
             conn.close()
 
     return render_template('admin.html', autorizado=True, registros=registros)
+
+
+@app.route('/comentar/<int:id>', methods=['POST'])
+def comentar(id):
+    """Actualiza solo el campo comentario de un registro (edicion inline)."""
+    data = request.get_json(silent=True) or {}
+    comentario = (data.get('comentario') or '').strip()
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("UPDATE seguimiento_vias SET comentario = %s WHERE id = %s;", (comentario, id))
+        conn.commit()
+    except (OperationalError, DatabaseError) as e:
+        app.logger.error(f"comentar DB error: {e}")
+        return jsonify({'error': 'Error de base de datos'}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+    return jsonify({'success': True, 'comentario': comentario})
 
 
 @app.route('/admin/logout')

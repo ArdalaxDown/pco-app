@@ -128,6 +128,7 @@
         <div class="d-flex align-items-center gap-2">
             <a href="/mapa" class="nav-btn">🗺️ Mapa</a>
             <a href="/historial" class="nav-btn">🔍 Historial</a>
+            <a href="/estadisticas" class="nav-btn">📊 Estadísticas</a>
             <a href="/exportar" class="nav-btn primary">📥 Reporte Excel</a>
             <button class="nav-btn cyan" onclick="document.getElementById('excelFileInput').click()">📂 Importar</button>
             <button class="nav-btn cyan" onclick="abrirModalTexto()">📝 Importar Texto</button>
@@ -297,12 +298,14 @@
                                 <thead class="text-nowrap" style="position: sticky; top: 0; z-index: 1; background:var(--ml-cyan);color:#fff;">
                                     <tr>
                                         <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">SPCO</th>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Empresa</th>
                                         <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Operador</th>
                                         <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Desde</th>
                                         <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Hasta</th>
                                         <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Responsable</th>
                                         <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">TETRA</th>
                                         <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Orden Trabajo</th>
+                                        <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Comentario Permiso</th>
                                         <th style="padding:0.5rem;font-size:0.72rem;font-weight:700;letter-spacing:0.3px;">Ingresar</th>
                                     </tr>
                                 </thead>
@@ -310,12 +313,16 @@
                                     {% for item in importados_pendientes %}
                                     <tr id="importRow{{ loop.index0 }}">
                                         <td class="small">{{ item.spco }}</td>
+                                        <td class="small"><span class="badge" style="background:var(--ml-blue);color:#fff;">{{ item.empresa }}</span></td>
                                         <td class="small">{{ item.operador }}</td>
                                         <td class="small">{{ item.desde }}</td>
                                         <td class="small">{{ item.hasta }}</td>
                                         <td class="small">{{ item.responsable }}</td>
                                         <td class="small">{{ item.tetra }}</td>
                                         <td class="small">{{ item.orden_trabajo }}</td>
+                                        <td class="small text-start" style="max-width: 220px;" title="{{ item.comentario }}">
+                                            {% if item.comentario %}<div class="bg-light rounded px-2 py-1" style="border-left:3px solid var(--ml-cyan);max-height:60px;overflow:hidden;">{{ item.comentario }}</div>{% else %}<span class="text-muted fst-italic">—</span>{% endif %}
+                                        </td>
                                         <td><input type="checkbox" class="form-check-input" onchange="confirmarImportado(this, {{ loop.index0 }})"></td>
                                     </tr>
                                     {% endfor %}
@@ -347,6 +354,7 @@
                                         <th>Responsable / ZONA</th>
                                         <th>Vehículo</th>
                                         <th>Personal PCO</th>
+                                        <th>Comentario</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
@@ -382,6 +390,11 @@
                                             <strong>ATS:</strong> {{ r[13] }}<br>
                                             <strong>SPCO:</strong> {{ r[14] }}
                                         </td>
+                                        <td class="small text-start" style="max-width: 200px;">
+                                            <div id="comentarioDisplay-{{ r[0] }}" class="{% if r[21] %}{% else %}text-muted fst-italic{% endif %}" style="cursor:pointer; min-height: 24px;" onclick="editarComentario({{ r[0] }}, this)" title="Click para agregar/editar comentario">
+                                                {% if r[21] %}{{ r[21] }}{% else %}<span class="small">+ agregar…</span>{% endif %}
+                                            </div>
+                                        </td>
                                         <td class="text-nowrap">
                                             {% if not r[12] %}
                                                 <a href="/liberar/{{ r[0] }}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Liberar', '{{ r[4] }}')">Liberar</a>
@@ -397,7 +410,7 @@
                                     </tr>
                                     {% else %}
                                     <tr>
-                                        <td colspan="8" class="text-muted py-4">No hay trabajos registrados en vía actualmente.</td>
+                                        <td colspan="9" class="text-muted py-4">No hay trabajos registrados en vía actualmente.</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -446,6 +459,7 @@
                             <div class="col mb-2"><label class="form-label-l2">N° Personas</label><input type="number" class="form-control form-control-sm" name="num_personas" value="{{ r[7] }}" required></div>
                             <div class="col mb-2"><label class="form-label-l2">TETRA</label><input type="text" class="form-control form-control-sm" name="tetra" value="{{ r[10] }}"></div>
                         </div>
+                        <div class="mb-2"><label class="form-label-l2">Comentario del Permiso</label><textarea class="form-control form-control-sm" name="comentario" rows="2" placeholder="Ej. Requiere corte de tensión, disponibilidad de iluminación, etc.">{{ r[21] if r[21] else '' }}</textarea></div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
@@ -663,6 +677,64 @@
             return confirm(frase);
         }
 
+        // ====== EDITAR COMENTARIO INLINE (AJAX) ======
+        function editarComentario(id, divDisplay) {
+            const comentActual = divDisplay.getAttribute('data-valor') || '';
+            divDisplay.removeAttribute('title');
+            divDisplay.style.cursor = 'default';
+
+            // Crear textarea + botones
+            const cont = document.createElement('div');
+            cont.innerHTML = `
+                <textarea class="form-control form-control-sm mb-1" rows="2" maxlength="500" placeholder="Ej. Requiere corte de tensión...">${comentActual}</textarea>
+                <div class="d-flex gap-1">
+                    <button type="button" class="btn btn-sm btn-ml-cyan text-white fw-bold flex-grow-1">💾 Guardar</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary">✕</button>
+                </div>
+            `;
+            divDisplay.replaceWith(cont);
+            const ta = cont.querySelector('textarea');
+            const [btnSave, btnCancel] = cont.querySelectorAll('button');
+            ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+
+            function restaurarDisplay(guardado) {
+                const nuevoDiv = document.createElement('div');
+                nuevoDiv.id = 'comentarioDisplay-' + id;
+                nuevoDiv.style.cursor = 'pointer';
+                nuevoDiv.style.minHeight = '24px';
+                nuevoDiv.setAttribute('onclick', 'editarComentario(' + id + ', this)');
+                nuevoDiv.setAttribute('title', 'Click para agregar/editar comentario');
+                if (guardado && guardado.trim()) {
+                    nuevoDiv.textContent = guardado;
+                    nuevoDiv.className = 'small';
+                    nuevoDiv.setAttribute('data-valor', guardado);
+                } else {
+                    nuevoDiv.innerHTML = '<span class="small text-muted fst-italic">+ agregar…</span>';
+                    nuevoDiv.className = 'text-muted fst-italic';
+                    nuevoDiv.setAttribute('data-valor', '');
+                }
+                cont.replaceWith(nuevoDiv);
+            }
+
+            btnSave.onclick = function() {
+                const nuevo = ta.value.trim();
+                btnSave.disabled = true; btnCancel.disabled = true;
+                btnSave.textContent = '⏳';
+                fetch('/comentar/' + id, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ comentario: nuevo })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) restaurarDisplay(data.comentario);
+                    else { alert('Error: ' + (data.error || 'no guardado')); restaurarDisplay(comentActual); }
+                })
+                .catch(err => { alert('Error de red: ' + err.message); restaurarDisplay(comentActual); });
+            };
+            btnCancel.onclick = function() { restaurarDisplay(comentActual); };
+        }
+
         // ====== LIMPIAR TODOS LOS IMPORTADOS PENDIENTES ======
         function limpiarImportados() {
             const cuerpo = document.getElementById('importPreviewBody');
@@ -689,12 +761,15 @@
 
             const celdas = row.querySelectorAll('td');
             const spco = celdas[0].textContent.trim();
-            const operador = celdas[1].textContent.trim();
-            const desde = celdas[2].textContent.trim();
-            const hasta = celdas[3].textContent.trim();
-            const responsable = celdas[4].textContent.trim();
-            const tetra = celdas[5].textContent.trim();
-            const orden = celdas[6].textContent.trim();
+            const empresa = celdas[1].textContent.trim();
+            const operador = celdas[2].textContent.trim();
+            const desde = celdas[3].textContent.trim();
+            const hasta = celdas[4].textContent.trim();
+            const responsable = celdas[5].textContent.trim();
+            const tetra = celdas[6].textContent.trim();
+            const orden = celdas[7].textContent.trim();
+            const comentarioDiv = celdas[8].querySelector('div');
+            const comentarioVal = comentarioDiv ? comentarioDiv.textContent.trim() : '';
             const zona = desde + ' -> ' + hasta;
 
             const ahora = new Date();
@@ -739,6 +814,13 @@
                     <td class="small text-start">
                         <strong>ATS:</strong> ${escapeHtml(operador)}<br>
                         <strong>SPCO:</strong> ${escapeHtml(spco)}
+                    </td>
+                    <td class="small text-start" style="max-width: 200px;">
+                        <div id="comentarioDisplay-${newId}" style="cursor:pointer; min-height: 24px;" onclick="editarComentario(${newId}, this)" title="Click para agregar/editar comentario" data-valor="${escapeHtml(comentarioVal)}">
+                            ${comentarioVal
+                                ? `<div class="bg-light rounded px-2 py-1" style="border-left:3px solid var(--ml-cyan);">${escapeHtml(comentarioVal)}</div>`
+                                : `<span class="small text-muted fst-italic">+ agregar…</span>`}
+                        </div>
                     </td>
                     <td class="text-nowrap">
                         <a href="/liberar/${newId}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion(${newId}, 'Liberar', '${escapeHtml(orden)}')">Liberar</a>
