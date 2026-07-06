@@ -286,7 +286,10 @@
                 <div class="card card-pco mb-3 {% if not importados_pendientes %}d-none{% endif %}" id="importPreviewCard" style="border-left:5px solid var(--ml-cyan);">
                     <div class="card-header bg-ml-cyan d-flex justify-content-between align-items-center">
                         <span>📋 Pendientes de Confirmación (Importados de Excel)</span>
-                        <button class="btn btn-sm btn-light fw-bold" onclick="document.getElementById('excelFileInput').click()">📁 Importar Otro</button>
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-light fw-bold" onclick="document.getElementById('excelFileInput').click()">📁 Importar Otro</button>
+                            <button class="btn btn-sm btn-outline-danger fw-bold" onclick="limpiarImportados()" title="Vaciar toda la lista de pendientes">🗑️ Limpiar Todo</button>
+                        </div>
                     </div>
                     <div class="card-body p-0">
                         <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
@@ -643,6 +646,24 @@
         function escapeHtml(t) {
             if (!t) return '';
             return String(t).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"');
+        }
+
+        // ====== LIMPIAR TODOS LOS IMPORTADOS PENDIENTES ======
+        function limpiarImportados() {
+            const cuerpo = document.getElementById('importPreviewBody');
+            const total = cuerpo ? cuerpo.querySelectorAll('tr').length : 0;
+            if (total === 0) {
+                alert('No hay importados pendientes que limpiar.');
+                return;
+            }
+            if (!confirm('¿Vaciar la lista de ' + total + ' trabajo(s) pendientes?\n\nEsto NO toca los trabajos ya ingresados en "En Vía". Solo limpia la lista de pendientes importados de Excel/Texto.')) return;
+            fetch('/limpiar_importados', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) location.reload();
+                    else alert('No se pudo limpiar.');
+                })
+                .catch(err => alert('Error: ' + err.message));
         }
 
         function confirmarImportado(checkbox, idx) {

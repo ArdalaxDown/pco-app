@@ -1013,6 +1013,13 @@ def importar_texto():
     return jsonify({'datos': datos, 'total': len(datos)})
 
 
+@app.route('/limpiar_importados', methods=['POST'])
+def limpiar_importados():
+    """Limpia toda la lista de importados pendientes de la sesion."""
+    session['importados_pendientes'] = []
+    return jsonify({'success': True, 'limpiados': True})
+
+
 def _parsear_fila_fija(fila):
     """Fallback: mapeo posicional fijo cuando NO hay cabecera reconocida.
     Mantiene compatibilidad con el mapeo anterior."""
