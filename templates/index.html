@@ -384,9 +384,9 @@
                                         </td>
                                         <td class="text-nowrap">
                                             {% if not r[12] %}
-                                                <a href="/liberar/{{ r[0] }}" class="btn btn-sm btn-ml-red fw-bold me-1">Liberar</a>
+                                                <a href="/liberar/{{ r[0] }}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Liberar')">Liberar</a>
                                             {% else %}
-                                                <a href="/revertir/{{ r[0] }}" class="btn btn-sm btn-ml-yellow fw-bold me-1">Revertir</a>
+                                                <a href="/revertir/{{ r[0] }}" class="btn btn-sm btn-ml-yellow fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Revertir')">Revertir</a>
                                             {% endif %}
                                             {% if r[4] and r[4] != '-' and r[4] != '' %}
                                             <button type="button" class="btn btn-sm btn-outline-primary fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado({{ r[0] }})">↩ Importados</button>
@@ -648,6 +648,14 @@
             return String(t).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"');
         }
 
+        // ====== CONFIRMAR LIBERACION / REVERSION ======
+        function confirmarLiberacion(id, accion) {
+            const frase = (accion === 'Liberar')
+                ? '¿Confirmar la SALIDA del trabajo ID ' + id + ' de la vía?\n\nSe registrará la hora de fin y el estado pasará a "Liberado".'
+                : '¿Revertir el trabajo ID ' + id + ' de vuelta a "En Vía"?\n\nSe quitará la hora de fin y volverá a estado activo.';
+            return confirm(frase);
+        }
+
         // ====== LIMPIAR TODOS LOS IMPORTADOS PENDIENTES ======
         function limpiarImportados() {
             const cuerpo = document.getElementById('importPreviewBody');
@@ -726,7 +734,7 @@
                         <strong>SPCO:</strong> ${escapeHtml(spco)}
                     </td>
                     <td class="text-nowrap">
-                        <a href="/liberar/${newId}" class="btn btn-sm btn-ml-red fw-bold me-1">Liberar</a>
+                        <a href="/liberar/${newId}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion(${newId}, 'Liberar')">Liberar</a>
                         <button type="button" class="btn btn-sm fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado(${newId})">↩ Importados</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="alert('Recarga la página para editar este registro.')">Corregir</button>
                         <a href="/eliminar/${newId}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar por completo?');">🗑️</a>
