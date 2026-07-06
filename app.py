@@ -1533,6 +1533,156 @@ def estadisticas():
         fecha_inicio=fecha_inicio, fecha_fin=fecha_fin, turno_filtro=turno_filtro)
 
 
+@app.route('/estadisticas_debug')
+def estadisticas_debug():
+    """ENDPOINT TEMPORAL DE DEBUG.
+    Devuelve JSON con todas las consultas SQL que ejecuta /estadisticas
+    para los mismos filtros, junto con sus resultados. Sirve para diagnosticar
+    por qué las estadísticas no muestran datos cuando el historial sí los tiene.
+    NO requiere autorización; se debe eliminar en cuanto se termine el debug."""
+    fecha_inicio = request.args.get('fecha_inicio', '')
+    fecha_fin = request.args.get('fecha_fin', '')
+    turno_filtro = request.args.get('turno', '')
+
+    where_clauses = []
+    params = []
+    if fecha_inicio:
+        where_clauses.append("fecha >= %s"); params.append(fecha_inicio)
+    if fecha_fin:
+        where_clauses.append("fecha <= %s"); params.append(fecha_fin)
+    if turno_filtro == 'dia':
+        where_clauses.append("hora_inicio IS NOT NULL AND hora_inicio::time >= '05:00'::time AND hora_inicio::time < '17:00'::time")
+    elif turno_filtro == 'noche':
+        where_clauses.append("hora_inicio IS NOT NULL AND (hora_inicio::time >= '17:00'::time OR hora_inicio::time < '05:00'::time)")
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    out = {
+        'filtros': {'fecha_inicio': fecha_inicio, 'fecha_fin': fecha_fin, 'turno': turno_filtro},
+        'where_sql': where_sql or '(sin WHERE)',
+        'params': params,
+        'consultas': []
+    }
+
+    conn = None; cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # 0) Distintos estados reales que hay en la BD
+        q = "SELECT estado, COUNT(*) FROM seguimiento_vias GROUP BY estado ORDER BY COUNT(*) DESC;"
+        cur.execute(q)
+        out['consultas'].append({
+            'nombre': 'estados_unicos',
+            'sql': q,
+            'resultado': cur.fetchall()
+        })
+
+        # 1) Todos los registros con sus fechas/horas (muestra primeros 50 ordenados por fecha desc)
+        q = "SELECT id, fecha, hora_inicio, hora_fin, estado, turno, empresa, responsable FROM seguimiento_vias ORDER BY fecha DESC, hora_inicio DESC NULLS LAST LIMIT 50;"
+        cur.execute(q)
+        out['consultas'].append({
+            'nombre': 'todos_50_recientes',
+            'sql': q,
+            'resultado': cur.fetchall()
+        })
+
+        # 2) Trabajos por fecha con el WHERE aplicado
+        q1 = f"SELECT fecha, COUNT(*) AS total FROM seguimiento_vias{where_sql} GROUP BY fecha ORDER BY fecha ASC;"
+        cur.execute(q1, tuple(params))
+        out['consultas'].append({
+            'nombre': 'por_dia_con_filtro',
+            'sql': q1,
+            'params': params,
+            'resultado': cur.fetchall()
+        })
+
+        # 3) Bloques dia/noche con el WHERE aplicado
+        q2 = f"""SELECT CASE WHEN hora_inicio IS NOT NULL AND hora_inicio::time >= '05:00'::time AND hora_inicio::time < '17:00'::time THEN 'Dia (05-17)' ELSE 'Noche (17-05)' END AS bloque, COUNT(*) AS total
+                 FROM seguimiento_vias{where_sql} GROUP BY bloque;"""
+        cur.execute(q2, tuple(params))
+        out['consultas'].append({
+            'nombre': 'bloques_dia_noche_con_filtro',
+            'sql': q2,
+            'params': params,
+            'resultado': cur.fetchall()
+        })
+
+        # 4) Estados con el WHERE aplicado (lo que usa total_reg)
+        q3 = f"SELECT estado, COUNT(*) FROM seguimiento_vias{where_sql} GROUP BY estado;"
+        cur.execute(q3, tuple(params))
+        out['consultas'].append({
+            'nombre': 'estados_con_filtro',
+            'sql': q3,
+            'params': params,
+            'resultado': cur.fetchall()
+        })
+
+        # 5) Total con filtro (lo que usa total_filtrado)
+        q4 = f"SELECT COUNT(*) FROM seguimiento_vias{where_sql};"
+        cur.execute(q4, tuple(params))
+        out['consultas'].append({
+            'nombre': 'total_con_filtro',
+            'sql': q4,
+            'params': params,
+            'resultado': cur.fetchone()
+        })
+
+        # 6) Total sin filtro
+        cur.execute("SELECT COUNT(*) FROM seguimiento_vias;")
+        out['consultas'].append({
+            'nombre': 'total_sin_filtro',
+            'sql': 'SELECT COUNT(*) FROM seguimiento_vias;',
+            'resultado': cur.fetchone()
+        })
+
+        # 7) Fechas disponibles (done el diagnóstico)
+        cur.execute("SELECT fecha, COUNT(*) AS total FROM seguimiento_vias GROUP BY fecha ORDER BY fecha DESC LIMIT 30;")
+        out['consultas'].append({
+            'nombre': 'fechas_disponibles',
+            'sql': 'SELECT fecha, COUNT(*) AS total FROM seguimiento_vias GROUP BY fecha ORDER BY fecha DESC LIMIT 30;',
+            'resultado': cur.fetchall()
+        })
+
+        # 8) Verificación: cuantos tienen hora_inicio = NULL por fecha
+        cur.execute("SELECT fecha, COUNT(*) AS con_hora_null FROM seguimiento_vias WHERE hora_inicio IS NULL GROUP BY fecha ORDER BY fecha DESC LIMIT 30;")
+        out['consultas'].append({
+            'nombre': 'registros_sin_hora_inicio_por_fecha',
+            'sql': 'SELECT fecha, COUNT(*) AS con_hora_null FROM seguimiento_vias WHERE hora_inicio IS NULL GROUP BY fecha ORDER BY fecha DESC LIMIT 30;',
+            'resultado': cur.fetchall()
+        })
+
+        # 9) Zona horaria efectiva de la conexión
+        cur.execute("SHOW TIME ZONE;")
+        out['consultas'].append({
+            'nombre': 'timezone_actual',
+            'sql': "SHOW TIME ZONE;",
+            'resultado': cur.fetchone()
+        })
+
+        # 10) CURRENT_DATE y CURRENT_TIME actual en la sesión
+        cur.execute("SELECT CURRENT_DATE, CURRENT_TIME, NOW();")
+        out['consultas'].append({
+            'nombre': 'current_date_time',
+            'sql': "SELECT CURRENT_DATE, CURRENT_TIME, NOW();",
+            'resultado': cur.fetchone()
+        })
+
+    except Exception as e:
+        out['ERROR'] = f"{type(e).__name__}: {e}"
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+    import json as _json
+    def _default(o):
+        if isinstance(o, (datetime, date)):
+            return o.isoformat()
+        if hasattr(o, 'isoformat'):
+            return o.isoformat()
+        return str(o)
+    return _json.dumps(out, ensure_ascii=False, indent=2, default=_default), 200, {'Content-Type': 'application/json; charset=utf-8'}
+
+
 @app.route('/admin')
 def admin_panel():
     """Panel admin: muestra TODOS los registros historicos (no solo hoy).
