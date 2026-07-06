@@ -888,8 +888,8 @@ def importar_excel():
 @app.route('/importar_texto', methods=['POST'])
 def importar_texto():
     """Importa trabajos pegados como texto TSV (mismo formato que el Excel original).
-    Acepta tabuladores o múltiples espacios como separador.
-    Filtra igual que el Excel: solo filas CONFIRMADA + ACCESO=SI."""
+    Detecta las columnas por su CABECERA (mas robusto al orden cambiante).
+    Filtra igual que el Excel: solo filas CONFIRMADA + ACCESO A VÍA=SI."""
     data = request.get_json(silent=True) or {}
     texto = (data.get('texto') or '').strip()
     if not texto:
@@ -898,7 +898,6 @@ def importar_texto():
     # Normalizar separadores: tabs -> tab único; detectar si viene del Excel (tab)
     # Si no hay tabs, asumimos que son múltiples espacios y los convertimos a tabs
     if '\t' not in texto and '  ' in texto:
-        # 2+ espacios seguidos -> un tab (preserva espacios simples dentro de comillas)
         texto = re.sub(r' {2,}', '\t', texto)
 
     lineas = [ln for ln in texto.split('\n') if ln.strip()]
@@ -908,49 +907,100 @@ def importar_texto():
     # Leer con csv dialect excel-tab (maneja comillas correctamente)
     reader = csv.reader(_stdio_io.StringIO(texto), dialect='excel-tab', skipinitialspace=False)
 
-    datos = []
-    for fila in reader:
-        if not fila or len(fila) < 5:
+    # Mapeo de cabeceras reconocidas -> campo interno
+    # (claves normalizadas en MAYUS sin tildes ni espacios dobles)
+    MAPA_CABECERAS = {
+        'ESTADO': 'estado',
+        'SPCO QUE VALIDA': 'spco',
+        'SEGUIMIENTO (NOMBRE OPCO)': 'operador',
+        'SEGUIMIENTO (NOMBRE OPCO)': 'operador',
+        'ORDEN DE TRABAJO': 'orden_trabajo',
+        'ORDEN DE TRABAJO': 'orden_trabajo',
+        'EMPRESA CONTRATISTA': 'empresa',
+        'EMPRESA CONTRATISTA': 'empresa',
+        'ACCESO A VÍA': 'acceso',
+        'ACCESO A VIA': 'acceso',
+        'DESDE': 'desde',
+        'HASTA': 'hasta',
+        'RESPONSABLE DE TRABAJOS': 'responsable',
+        'CELULAR Y TETRA EXT': 'celular_tetra',
+    }
+
+    def norm(s):
+        # Normaliza: MAYUS, sin tildes, espacios colapsados
+        s = (s or '').strip().upper()
+        s = s.replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U').replace('Ñ', 'N')
+        s = re.sub(r'\s+', ' ', s)
+        return s
+
+    # Primera fila NO vacia = cabecera. Buscarla.
+    fila_iter = iter(reader)
+    cabecera_idx = {}
+    cab_encontrada = False
+    for fila in fila_iter:
+        if not fila or not any(c.strip() for c in fila):
             continue
-        # Igual que el Excel, fila 6+ son datos; el header de columnas llega a veces
-        # Si una fila tiene texto "N°" o "NRO" en col 0, la saltamos
-        col0 = (fila[0] or '').strip().upper()
-        if col0 in ('N°', 'NRO', 'N.', 'N', 'ITEM', '#'):
-            continue
+        norm_fila = [norm(c) for c in fila]
+        # Comprobar si contiene al menos 'ESTADO' y 'ACCESO A VIA' -> es cabecera
+        if 'ESTADO' in norm_fila or 'ESTADO' in [n.split('(')[0].strip() for n in norm_fila]:
+            for i, c in enumerate(norm_fila):
+                if c in MAPA_CABECERAS:
+                    cabecera_idx[MAPA_CABECERAS[c]] = i
+            cab_encontrada = True
+            break
+        # Puede que la primera fila ya sea datos (sin cabecera) -> caer al fallback fijo
+        else:
+            # Reinsertar esta fila como primera fila de datos usando mapeo fijo
+            datos_fijos = [_parsear_fila_fija(fila)]
+            cab_encontrada = False
+            break
 
-        # Mapeo del texto pegado (TSV con cabecera del reporte original):
-        # col1=estado, col2=spco, col4=operador, col7=orden_trabajo,
-        # col10=empresa, col13=acceso_via (SI), col16=desde, col17=hasta,
-        # col19=responsable/nombres, col20=celulares_tetra
-        estado = (fila[1] if len(fila) > 1 else '') or ''
-        acceso = (fila[13] if len(fila) > 13 else '') or ''
+    if not cab_encontrada and not cabecera_idx:
+        # Fallback: usar mapeo posicional fijo (texto sin cabecera, igual que antes)
+        # Releer todo desde el principio
+        reader = csv.reader(_stdio_io.StringIO(texto), dialect='excel-tab', skipinitialspace=False)
+        datos = []
+        for fila in reader:
+            parsed = _parsear_fila_fija(fila)
+            if parsed:
+                datos.append(parsed)
+    else:
+        # Mapeo por cabecera: leer resto de filas
+        campos_requeridos = ('estado', 'acceso')
+        if not all(c in cabecera_idx for c in campos_requeridos):
+            return jsonify({'error': 'Faltan cabeceras obligatorias (ESTADO, ACCESO A VÍA). Cabeceras detectadas: ' + ', '.join(cabecera_idx.keys())}), 400
 
-        if str(estado).strip().upper() != 'CONFIRMADA':
-            continue
-        if str(acceso).strip().upper() != 'SI':
-            continue
+        datos = []
+        for fila in fila_iter:
+            if not fila or not any(c.strip() for c in fila):
+                continue
+            estado_val = fila[cabecera_idx['estado']].strip().upper() if 'estado' in cabecera_idx and len(fila) > cabecera_idx['estado'] else ''
+            acceso_val = fila[cabecera_idx['acceso']].strip().upper() if 'acceso' in cabecera_idx and len(fila) > cabecera_idx['acceso'] else ''
 
-        spco = (fila[2] if len(fila) > 2 else '') or ''
-        operador = (fila[4] if len(fila) > 4 else '') or ''
-        orden_trabajo = (fila[7] if len(fila) > 7 else '') or ''
-        empresa = (fila[10] if len(fila) > 10 else '') or ''
-        desde = (fila[16] if len(fila) > 16 else '') or ''
-        hasta = (fila[17] if len(fila) > 17 else '') or ''
-        responsable = (fila[19] if len(fila) > 19 else '') or ''
-        celular_tetra = (fila[20] if len(fila) > 20 else '') or ''
+            if estado_val != 'CONFIRMADA':
+                continue
+            if acceso_val != 'SI':
+                continue
 
-        tetra = extract_tetra(celular_tetra)
+            def getcampo(campo):
+                idx = cabecera_idx.get(campo)
+                if idx is None or idx >= len(fila):
+                    return ''
+                return str(fila[idx]).strip()
 
-        datos.append({
-            'spco': str(spco).strip(),
-            'operador': str(operador).strip(),
-            'desde': str(desde).strip(),
-            'hasta': str(hasta).strip(),
-            'responsable': str(responsable).strip(),
-            'tetra': tetra,
-            'orden_trabajo': str(orden_trabajo).strip(),
-            'empresa': str(empresa).strip(),
-        })
+            celular = getcampo('celular_tetra')
+            tetra = extract_tetra(celular)
+
+            datos.append({
+                'spco': getcampo('spco'),
+                'operador': getcampo('operador'),
+                'desde': getcampo('desde'),
+                'hasta': getcampo('hasta'),
+                'responsable': getcampo('responsable'),
+                'tetra': tetra,
+                'orden_trabajo': getcampo('orden_trabajo'),
+                'empresa': getcampo('empresa'),
+            })
 
     if not datos:
         return jsonify({'error': 'No se encontraron filas CONFIRMADAS con ACCESO=SI en el texto pegado'}), 400
@@ -961,6 +1011,41 @@ def importar_texto():
     session['importados_pendientes'] = prev
 
     return jsonify({'datos': datos, 'total': len(datos)})
+
+
+def _parsear_fila_fija(fila):
+    """Fallback: mapeo posicional fijo cuando NO hay cabecera reconocida.
+    Mantiene compatibilidad con el mapeo anterior."""
+    if not fila or len(fila) < 5:
+        return None
+    col0 = (fila[0] or '').strip().upper()
+    if col0 in ('N°', 'NRO', 'N.', 'N', 'ITEM', '#'):
+        return None
+    estado = (fila[1] if len(fila) > 1 else '') or ''
+    acceso = (fila[13] if len(fila) > 13 else '') or ''
+    if str(estado).strip().upper() != 'CONFIRMADA':
+        return None
+    if str(acceso).strip().upper() != 'SI':
+        return None
+    spco = (fila[2] if len(fila) > 2 else '') or ''
+    operador = (fila[4] if len(fila) > 4 else '') or ''
+    orden_trabajo = (fila[7] if len(fila) > 7 else '') or ''
+    empresa = (fila[10] if len(fila) > 10 else '') or ''
+    desde = (fila[16] if len(fila) > 16 else '') or ''
+    hasta = (fila[17] if len(fila) > 17 else '') or ''
+    responsable = (fila[19] if len(fila) > 19 else '') or ''
+    celular_tetra = (fila[20] if len(fila) > 20 else '') or ''
+    tetra = extract_tetra(celular_tetra)
+    return {
+        'spco': str(spco).strip(),
+        'operador': str(operador).strip(),
+        'desde': str(desde).strip(),
+        'hasta': str(hasta).strip(),
+        'responsable': str(responsable).strip(),
+        'tetra': tetra,
+        'orden_trabajo': str(orden_trabajo).strip(),
+        'empresa': str(empresa).strip(),
+    }
 
 
 @app.route('/confirmar_importado', methods=['POST'])
