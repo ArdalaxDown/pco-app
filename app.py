@@ -1138,7 +1138,7 @@ def revertir_importado(id):
 # ==========================================================================
 # ADMIN: Panel oculto protegido por PIN
 # ==========================================================================
-ADMIN_PIN = os.environ.get("ADMIN_PIN", "pco-admin-local-dev")  # PIN por entorno en Render
+ADMIN_PIN = os.environ.get("ADMIN_PIN", "admin123")  # PIN por defecto local; en produccion usar variable de entorno ADMIN_PIN
 
 def admin_verificar_pin(pin):
     """Compara PIN con el configurado en variables de entorno."""
