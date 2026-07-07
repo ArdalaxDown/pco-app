@@ -265,7 +265,7 @@ def normalizar_zonas(zonas):
 
     zonas_normalizadas = set()
     for parte in partes:
-        zona = parte.strip().replace(" ", "").upper()
+        zona = ' '.join(parte.strip().upper().split())
         if zona:
             zonas_normalizadas.add(zona)
     return zonas_normalizadas
@@ -369,7 +369,7 @@ def mapa():
 
         partes = cadena_zona.replace(',', '+').split('+')
         for parte in partes:
-            zona_limpia = parte.strip().replace(" ", "").upper()
+            zona_limpia = ' '.join(parte.strip().upper().split())
             if zona_limpia and zona_limpia not in zonas_ocupadas:
                 zonas_ocupadas.append(zona_limpia)
             if zona_limpia:
@@ -475,7 +475,7 @@ def ingresar():
         # GUARDAMOS TODO EN LA SESIÓN (Por si hay rechazo de Safety)
         session['form_previo'] = request.form.to_dict()
 
-        partes_nuevas = [p.strip().replace(" ", "").upper() for p in ubicacion_zona.replace(',', '+').split('+') if p.strip()]
+        partes_nuevas = [' '.join(p.strip().upper().split()) for p in ubicacion_zona.replace(',', '+').split('+') if p.strip()]
 
         conn = get_db_connection()
         cur = conn.cursor()
