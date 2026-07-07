@@ -782,11 +782,13 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ _idx: idx, hora_inicio: horaActual })
             })
-            .then(response => response.json())
+            .then(response => response.json().catch(() => {
+                throw new Error('El servidor devolvió una respuesta inesperada. Intenta recargar la página (F5) y vuelve a importar.');
+            }))
             .then(result => {
                 if (!result.success) {
                     checkbox.checked = false;
-                    alert('Error al confirmar el ingreso.');
+                    alert('Error al confirmar: ' + (result.error || 'Error desconocido. Recarga la página y reintenta.'));
                     return;
                 }
 
@@ -838,7 +840,7 @@
             })
             .catch(err => {
                 checkbox.checked = false;
-                alert('Error de conexión: ' + err.message);
+                alert('Error: ' + err.message + '\n\nSi el problema persiste, recarga la página (F5) y vuelve a importar los datos.');
             });
         }
 

@@ -1242,48 +1242,64 @@ def _parsear_fila_fija(fila):
 
 @app.route('/confirmar_importado', methods=['POST'])
 def confirmar_importado():
-    data = request.get_json() or {}
-    idx = data.get('_idx', -1)
+    try:
+        data = request.get_json() or {}
+        idx = int(data.get('_idx', -1))
 
-    # Tomar datos completos desde la sesión
-    pendientes = session.get('importados_pendientes', [])
-    item = pendientes[idx] if 0 <= idx < len(pendientes) else data
+        # Tomar datos completos desde la sesión
+        pendientes = session.get('importados_pendientes', [])
+        if 0 <= idx < len(pendientes):
+            item = pendientes[idx]
+        else:
+            return jsonify({'success': False, 'error': f'Índice {idx} fuera de rango. Hay {len(pendientes)} pendientes. Recarga la página y vuelve a importar.'}), 400
 
-    turno = session.get('turno', 'Turno 1')
-    operador = item.get('operador', session.get('operador_turno', 'Importado'))
-    spco = item.get('spco', session.get('spco_turno', 'Importado'))
-    empresa = item.get('empresa', '')
-    orden_trabajo = item.get('orden_trabajo', '')
-    responsable = item.get('responsable', '')
-    desde = item.get('desde', '')
-    hasta = item.get('hasta', '')
-    zona = f"{desde} -> {hasta}" if desde and hasta else (desde or hasta)
-    tetra = item.get('tetra', '')
-    comentario = item.get('comentario', '')
+        turno = session.get('turno', 'Turno 1')
+        operador = item.get('operador', session.get('operador_turno', 'Importado'))
+        spco = item.get('spco', session.get('spco_turno', 'Importado'))
+        empresa = item.get('empresa', '')
+        orden_trabajo = item.get('orden_trabajo', '')
+        responsable = item.get('responsable', '')
+        desde = item.get('desde', '')
+        hasta = item.get('hasta', '')
+        zona = f"{desde} -> {hasta}" if desde and hasta else (desde or hasta)
+        tetra = item.get('tetra', '')
+        comentario = item.get('comentario', '')
 
-    hora_inicio_str = data.get('hora_inicio', '')
-    hora_inicio = datetime.strptime(hora_inicio_str, "%H:%M:%S").time() if hora_inicio_str else None
+        hora_inicio_str = data.get('hora_inicio', '')
+        hora_inicio = datetime.strptime(hora_inicio_str, "%H:%M:%S").time() if hora_inicio_str else None
 
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT INTO seguimiento_vias 
-        (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, fecha, hora_inicio, estado, comentario)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, CURRENT_DATE, COALESCE(%s, CURRENT_TIME), 'En Vía', %s)
-        RETURNING id;
-    """, (turno, operador, spco, empresa, orden_trabajo, responsable, zona, tetra, hora_inicio, comentario))
-    new_id = cur.fetchone()[0]
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn = None
+        cur = None
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO seguimiento_vias 
+                (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, fecha, hora_inicio, estado, comentario)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 0, %s, CURRENT_DATE, COALESCE(%s, CURRENT_TIME), 'En Vía', %s)
+                RETURNING id;
+            """, (turno, operador, spco, empresa, orden_trabajo, responsable, zona, tetra, hora_inicio, comentario))
+            new_id = cur.fetchone()[0]
+            conn.commit()
+        except (OperationalError, DatabaseError) as e:
+            app.logger.error(f"confirmar_importado DB error: {e}")
+            return jsonify({'success': False, 'error': 'Error de base de datos al confirmar. Intenta de nuevo.'}), 500
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
 
-    # Remover de la sesión
-    pendientes = session.get('importados_pendientes', [])
-    if 0 <= idx < len(pendientes):
-        pendientes.pop(idx)
-        session['importados_pendientes'] = pendientes
+        # Remover de la sesión
+        pendientes = session.get('importados_pendientes', [])
+        if 0 <= idx < len(pendientes):
+            pendientes.pop(idx)
+            session['importados_pendientes'] = pendientes
 
-    return jsonify({'success': True, 'id': new_id, 'empresa': empresa, 'comentario': comentario})
+        return jsonify({'success': True, 'id': new_id, 'empresa': empresa, 'comentario': comentario})
+    except Exception as e:
+        app.logger.error(f"confirmar_importado error general: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/revertir_importado/<int:id>')
