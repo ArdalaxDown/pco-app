@@ -254,6 +254,17 @@ def get_db_connection(max_retries=3, delay=1):
     raise last_err
 
 
+def parse_hora_flexible(hora_str):
+    if not hora_str or not hora_str.strip():
+        return None
+    hora_str = hora_str.strip()
+    partes = hora_str.split(':')
+    h = int(partes[0]) if len(partes) > 0 and partes[0] else 0
+    m = int(partes[1]) if len(partes) > 1 and partes[1] else 0
+    s = int(partes[2]) if len(partes) > 2 and partes[2] else 0
+    return time(h, m, s)
+
+
 def normalizar_zonas(zonas):
     if not zonas:
         return set()
@@ -602,8 +613,8 @@ def editar(id):
         
         h_inicio_str = request.form['hora_inicio']
         h_fin_str = request.form['hora_fin']
-        hora_inicio = datetime.strptime(h_inicio_str, "%H:%M:%S").time() if h_inicio_str else None
-        hora_fin = datetime.strptime(h_fin_str, "%H:%M:%S").time() if h_fin_str else None
+        hora_inicio = parse_hora_flexible(h_inicio_str)
+        hora_fin = parse_hora_flexible(h_fin_str)
         estado = 'Liberado' if hora_fin else 'En Vía'
 
         conn = None
@@ -1266,7 +1277,7 @@ def confirmar_importado():
         comentario = item.get('comentario', '')
 
         hora_inicio_str = data.get('hora_inicio', '')
-        hora_inicio = datetime.strptime(hora_inicio_str, "%H:%M:%S").time() if hora_inicio_str else None
+        hora_inicio = parse_hora_flexible(hora_inicio_str)
 
         conn = None
         cur = None
