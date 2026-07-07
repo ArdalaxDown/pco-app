@@ -859,7 +859,7 @@ def archivar_turno():
 def restaurar(id):
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("UPDATE seguimiento_vias SET archivado = FALSE WHERE id = %s;", (id,))
+    cur.execute("UPDATE seguimiento_vias SET archivado = FALSE, fecha = CURRENT_DATE WHERE id = %s;", (id,))
     conn.commit()
     cur.close()
     conn.close()
@@ -1745,6 +1745,36 @@ def comentar(id):
         if conn:
             conn.close()
     return jsonify({'success': True, 'comentario': comentario})
+
+
+@app.route('/admin/eliminar_todos', methods=['POST'])
+def admin_eliminar_todos():
+    if not session.get('admin_pin_ok'):
+        data = request.get_json(silent=True) or {}
+        pin = (data.get('pin') or '').strip()
+        if not admin_verificar_pin(pin):
+            return jsonify({'error': 'No autorizado'}), 403
+
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM seguimiento_vias;")
+        total = cur.fetchone()[0]
+        cur.execute("DELETE FROM seguimiento_vias;")
+        conn.commit()
+        app.logger.warning(f"admin_eliminar_todos: {total} registros eliminados de la base de datos")
+    except (OperationalError, DatabaseError) as e:
+        app.logger.error(f"admin_eliminar_todos DB error: {e}")
+        return jsonify({'error': 'Error de base de datos'}), 500
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+    return jsonify({'success': True, 'eliminados': total})
 
 
 @app.route('/admin/logout')

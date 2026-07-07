@@ -24,29 +24,28 @@
         }
         .btn-pin { background: var(--ml-red); color: #fff; border: none; font-weight: 600; }
         .btn-pin:hover { background: #B50510; color: #fff; }
+        .btn-danger-dark { background: #8B0000; color: #fff; border: none; font-weight: 700; }
+        .btn-danger-dark:hover { background: #5C0000; color: #fff; }
         .admin-table { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-        .admin-table th { background: var(--ml-dark); color: #fff; font-size: 0.72rem; letter-spacing: 0.3px; padding: 0.5rem; text-align: center; white-space: nowrap; }
-        .admin-table td { font-size: 0.78rem; padding: 0.4rem 0.5rem; vertical-align: middle; }
+        .admin-table th { background: var(--ml-dark); color: #fff; font-size: 0.68rem; letter-spacing: 0.3px; padding: 0.45rem 0.35rem; text-align: center; white-space: nowrap; }
+        .admin-table td { font-size: 0.74rem; padding: 0.35rem 0.4rem; vertical-align: middle; }
         .admin-table tr:hover { background: #fdecea !important; }
         .estado-en-via { color: #fff; background: var(--ml-cyan); padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; }
         .estado-liberado { color: #fff; background: #28a745; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; }
         .archivado-badge { background: #6c757d; color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; }
-        .btn-eliminar-admin { background: var(--ml-red); color: #fff; border: none; padding: 3px 10px; border-radius: 4px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+        .btn-eliminar-admin { background: var(--ml-red); color: #fff; border: none; padding: 3px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; cursor: pointer; }
         .btn-eliminar-admin:hover { background: #B50510; }
-        .usra-hidden { display: none; }
         .stats-card { background: #fff; border-left: 4px solid var(--ml-red); }
         .pin-modal input { letter-spacing: 4px; font-family: monospace; text-align: center; }
         .footer-admin { font-size: 0.7rem; color: #6c757d; padding: 1rem 0; text-align: center; }
+        .danger-zone { border: 2px dashed var(--ml-red); border-radius: 8px; padding: 1rem; background: #fff5f5; }
+        .danger-zone h6 { color: var(--ml-red); }
+        .modal-delete-all .modal-header { background: #8B0000; color: #fff; }
     </style>
 </head>
 <body>
 
 {% if not autorizado %}
-<!-- ============================================================ -->
-<!-- VISTA NO AUTORIZADA: devuelve 404 al navegador pero permite  -->
-<!-- que el usuario trate de ingresar PIN via input embebido.     -->
-<!-- El navegador no muestra el 404 visual porque tenemos body.    -->
-<!-- ============================================================ -->
 <div class="container" style="max-width: 360px; margin-top: 12vh;">
     <div class="card shadow-sm" style="border: 2px solid var(--ml-dark);">
         <div class="card-header text-white" style="background: var(--ml-dark);">
@@ -67,18 +66,14 @@
     function validarPin() {
         const pin = document.getElementById('pinInput').value.trim();
         if (!pin) return;
-        // Redirige con el PIN en query. El backend verificara y guardara en sesion.
         window.location.href = '/admin?pin=' + encodeURIComponent(pin);
     }
 </script>
 {% else %}
-<!-- ============================================================ -->
-<!-- PANEL ADMIN AUTORIZADO                                       -->
-<!-- ============================================================ -->
 <nav class="navbar-admin d-flex justify-content-between align-items-center">
     <div class="d-flex align-items-center gap-2">
         <span class="badge bg-danger">ADMIN</span>
-        <span class="fw-bold">PCO L2 · Panel de Administración</span>
+        <span class="fw-bold">PCO L2 · Base de Datos SQL Completa</span>
     </div>
     <div class="d-flex gap-2">
         <a href="/" class="btn btn-sm btn-outline-light">← PCO</a>
@@ -92,47 +87,54 @@
     <div class="row mb-3 g-2">
         <div class="col-md-3">
             <div class="stats-card card p-2">
-                <small class="text-muted">Total registros</small>
+                <small class="text-muted">Total registros SQL</small>
                 <strong class="fs-5">{{ registros|length }}</strong>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stats-card card p-2" style="border-left-color: var(--ml-cyan);">
                 <small class="text-muted">En Vía (activos)</small>
-                <strong class="fs-5" style="color: var(--ml-cyan);">{% for r in registros if r[11] == 'En Vía' %}{% if loop.last %}{{ loop.index }}{% endif %}{% endfor %}</strong>
+                {% set en_via_count = registros|selectattr('11', 'equalto', 'En Vía')|list|length %}
+                <strong class="fs-5" style="color: var(--ml-cyan);">{{ en_via_count }}</strong>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stats-card card p-2" style="border-left-color: #28a745;">
                 <small class="text-muted">Liberados</small>
-                <strong class="fs-5" style="color: #28a745;">{% for r in registros if r[11] == 'Liberado' %}{% if loop.last %}{{ loop.index }}{% endif %}{% endfor %}</strong>
+                {% set lib_count = registros|selectattr('11', 'equalto', 'Liberado')|list|length %}
+                <strong class="fs-5" style="color: #28a745;">{{ lib_count }}</strong>
             </div>
         </div>
         <div class="col-md-3">
             <div class="stats-card card p-2" style="border-left-color: #6c757d;">
                 <small class="text-muted">Archivados</small>
-                <strong class="fs-5" style="color: #6c757d;">{% for r in registros if r[19] %}{% if loop.last %}{{ loop.index }}{% endif %}{% endfor %}</strong>
+                {% set arch_count = registros|selectattr('19', 'equalto', True)|list|length %}
+                <strong class="fs-5" style="color: #6c757d;">{{ arch_count }}</strong>
             </div>
         </div>
     </div>
 
-    <!-- Buscador -->
+    <!-- Buscador + Zona de Peligro -->
     <div class="row mb-2">
         <div class="col-md-6">
             <input type="text" id="buscarAdmin" class="form-control form-control-sm" placeholder="🔍 Buscar por empresa, responsable, OT, zona...">
         </div>
-        <div class="col-md-6 d-flex justify-content-end align-items-center gap-2">
-            <small class="text-muted">Filtrar estado:</small>
-            <select id="filtroEstado" class="form-select form-select-sm" style="width: auto;">
-                <option value="">Todos</option>
+        <div class="col-md-3">
+            <select id="filtroEstado" class="form-select form-select-sm">
+                <option value="">Todos los estados</option>
                 <option value="En Vía">En Vía</option>
                 <option value="Liberado">Liberado</option>
             </select>
         </div>
+        <div class="col-md-3 text-end">
+            <button class="btn btn-sm btn-danger-dark" onclick="abrirModalBorrarTodo()" title="Eliminar TODOS los registros de la base de datos SQL permanentemente">
+                ⚠️ Borrar TODA la Base de Datos
+            </button>
+        </div>
     </div>
 
-    <!-- Tabla -->
-    <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+    <!-- Tabla completa SQL -->
+    <div class="table-responsive" style="max-height: 65vh; overflow-y: auto;">
         <table class="table table-sm admin-table mb-0" id="tablaAdmin">
             <thead style="position: sticky; top: 0; z-index: 1;">
                 <tr>
@@ -140,57 +142,111 @@
                     <th>Fecha</th>
                     <th>Turno</th>
                     <th>Empresa</th>
-                    <th>Ord. Trabajo</th>
+                    <th>Ord. Trab.</th>
                     <th>Responsable</th>
                     <th>Zona</th>
+                    <th>N° Pers.</th>
+                    <th>TETRA</th>
                     <th>Hr. Inicio</th>
                     <th>Hr. Fin</th>
                     <th>Estado</th>
+                    <th>Vehículo</th>
                     <th>Operador</th>
                     <th>SPCO</th>
-                    <th>Archivado</th>
+                    <th>Arch.</th>
+                    <th>Comentario</th>
                     <th>Acción</th>
                 </tr>
             </thead>
             <tbody>
                 {% for r in registros %}
-                <tr data-estado="{{ r[11] }}" data-buscar="{{ (r[3] ~ ' ' ~ r[5] ~ ' ' ~ r[7] ~ ' ' ~ r[6])|upper }}">
-                    <td>{{ r[0] }}</td>
+                <tr data-estado="{{ r[11] }}" data-buscar="{{ (r[3] ~ ' ' ~ r[5] ~ ' ' ~ r[4] ~ ' ' ~ r[6] ~ ' ' ~ (r[20] or ''))|upper }}">
+                    <td><strong>{{ r[0] }}</strong></td>
                     <td>{{ r[1] }}</td>
                     <td>{{ r[2] }}</td>
-                    <td>{{ r[3] }}</td>
-                    <td>{{ r[4] }}</td>
+                    <td><span class="badge" style="background:var(--ml-blue);">{{ r[3] }}</span></td>
+                    <td><span class="badge" style="background:var(--ml-cyan);">{{ r[4] }}</span></td>
                     <td>{{ r[5] }}</td>
-                    <td>{{ r[6] }}</td>
+                    <td class="fw-bold text-danger">{{ r[6] }}</td>
+                    <td>{{ r[7] }}</td>
+                    <td>{{ r[8] }}</td>
                     <td>{{ r[9] }}</td>
                     <td>{{ r[10] }}</td>
                     <td>
                         {% if r[11] == 'En Vía' %}<span class="estado-en-via">En Vía</span>
                         {% else %}<span class="estado-liberado">Liberado</span>{% endif %}
                     </td>
+                    <td>
+                        {% if r[12] %}
+                            <span class="badge border" style="color:var(--ml-red);border-color:var(--ml-red)!important;">{{ r[13] }} {{ r[14] }}</span>
+                        {% else %}<span class="text-muted">—</span>{% endif %}
+                    </td>
                     <td>{{ r[16] }}</td>
                     <td>{{ r[17] }}</td>
                     <td>{% if r[19] %}<span class="archivado-badge">Sí</span>{% else %}No{% endif %}</td>
-                    <td>
+                    <td class="small text-start" style="max-width:180px; white-space:normal;">
+                        {% if r[20] %}<span class="text-muted">{{ r[20] }}</span>{% else %}—{% endif %}
+                    </td>
+                    <td class="text-nowrap">
                         <button class="btn-eliminar-admin" onclick="eliminarRegistro({{ r[0] }}, this)">🗑️ Borrar</button>
                     </td>
                 </tr>
                 {% endfor %}
                 {% if not registros %}
-                <tr><td colspan="14" class="text-center text-muted py-4">No hay registros en el historial.</td></tr>
+                <tr><td colspan="18" class="text-center text-muted py-5">No hay registros en la base de datos SQL.</td></tr>
                 {% endif %}
             </tbody>
         </table>
     </div>
 
-    <div class="footer-admin">
-        ⚠️ El borrado es <strong>permanente</strong>. Cualquier eliminación es irreversible. Verifica el ID antes de confirmar.
+    <!-- Zona de Peligro -->
+    <div class="danger-zone mt-3">
+        <h6 class="fw-bold mb-2">⚠️ Zona de Peligro — Operaciones Irreversibles</h6>
+        <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-sm btn-danger-dark" onclick="abrirModalBorrarTodo()">
+                🗑️ Vaciar TODA la Base de Datos SQL
+            </button>
+            <small class="text-muted ms-2">Esta acción elimina permanentemente <strong>todos</strong> los registros. Úsala solo para limpieza total.</small>
+        </div>
+    </div>
+
+    <div class="footer-admin mt-2">
+        ⚠️ Cada eliminación es <strong>permanente e irreversible</strong>. Verifica el ID antes de confirmar.
+    </div>
+</div>
+
+<!-- MODAL: Confirmación de Borrado Total -->
+<div class="modal fade" id="modalBorrarTodo" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-delete-all">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold">⚠️ BORRAR TODA LA BASE DE DATOS</h5>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger fw-bold mb-3 text-center">
+                    ⛔ ADVERTENCIA FINAL ⛔<br>
+                    Esta acción eliminará <strong>TODOS</strong> los registros de la tabla <code>seguimiento_vias</code>.<br>
+                    Es <u>IRREVERSIBLE</u>. No hay copia de seguridad automática.
+                </div>
+                <p class="fw-bold text-center mb-2">Para confirmar, escribe <span style="color:#8B0000;font-family:monospace;font-size:1.1rem;">ELIMINAR TODO</span> exactamente:</p>
+                <input type="text" id="confirmText" class="form-control form-control-lg text-center mb-3" style="border:2px solid #8B0000;font-family:monospace;font-weight:bold;" placeholder='Escribe "ELIMINAR TODO" aquí' autofocus maxlength="20">
+                <div id="deleteAllFeedback" class="text-center small"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary fw-bold" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" id="btnConfirmDeleteAll" class="btn btn-danger-dark fw-bold" disabled onclick="ejecutarBorradoTotal()">
+                    🗑️ Sí, ELIMINAR TODO
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    // Buscador
+    let modalBorrarTodo = null;
+
+    // Buscador + filtro estado
     const inputBuscar = document.getElementById('buscarAdmin');
     const filtroEstado = document.getElementById('filtroEstado');
     function aplicarFiltros() {
@@ -207,9 +263,9 @@
     inputBuscar.addEventListener('input', aplicarFiltros);
     filtroEstado.addEventListener('change', aplicarFiltros);
 
-    // Eliminar registro
+    // ====== ELIMINAR REGISTRO INDIVIDUAL ======
     function eliminarRegistro(id, btn) {
-        if (!confirm('¿Eliminar permanentemente el registro ID ' + id + '? Esta acción NO se puede deshacer.')) return;
+        if (!confirm('¿Eliminar permanentemente el registro ID ' + id + ' de la base de datos SQL?\n\nEsta acción NO se puede deshacer.')) return;
         btn.disabled = true;
         btn.innerHTML = '⏳...';
 
@@ -222,12 +278,12 @@
         .then(({status, body}) => {
             if (status === 200 && body.success) {
                 const fila = btn.closest('tr');
-                fila.style.background = '#f8d7da';
-                fila.style.transition = 'opacity 0.4s';
-                setTimeout(() => fila.remove(), 300);
-                // Actualizar contadores visibles
-                const span = document.querySelector('.footer-admin');
-                if (span) span.insertAdjacentHTML('afterbegin', '✅ Registro ' + id + ' eliminado. ');
+                if (fila) {
+                    fila.style.background = '#f8d7da';
+                    fila.style.transition = 'opacity 0.3s';
+                    fila.style.opacity = '0';
+                    setTimeout(() => fila.remove(), 300);
+                }
             } else {
                 alert('Error: ' + (body.error || 'No se pudo eliminar'));
                 btn.disabled = false;
@@ -241,7 +297,96 @@
         });
     }
 
-    // Cerrar sesion admin limpia la sesion del backend
+    // ====== MODAL BORRAR TODO ======
+    function abrirModalBorrarTodo() {
+        const modalEl = document.getElementById('modalBorrarTodo');
+        if (!modalEl) return;
+        if (!modalBorrarTodo) modalBorrarTodo = new bootstrap.Modal(modalEl);
+        const input = document.getElementById('confirmText');
+        const btn = document.getElementById('btnConfirmDeleteAll');
+        const feedback = document.getElementById('deleteAllFeedback');
+        input.value = '';
+        btn.disabled = true;
+        feedback.innerHTML = '';
+        modalBorrarTodo.show();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const confirmInput = document.getElementById('confirmText');
+        const confirmBtn = document.getElementById('btnConfirmDeleteAll');
+        const feedback = document.getElementById('deleteAllFeedback');
+
+        if (confirmInput && confirmBtn) {
+            confirmInput.addEventListener('input', function() {
+                const val = this.value.trim();
+                feedback.innerHTML = '';
+                if (val === 'ELIMINAR TODO') {
+                    confirmBtn.disabled = false;
+                    feedback.innerHTML = '<span class="text-danger fw-bold">✅ Confirmación correcta. Puedes presionar el botón.</span>';
+                } else if (val.length > 0 && val === 'ELIMINAR TODO'.substring(0, val.length)) {
+                    feedback.innerHTML = '<span class="text-warning small">Escribe exactamente: <strong>ELIMINAR TODO</strong></span>';
+                } else {
+                    confirmBtn.disabled = true;
+                    if (val.length > 0) {
+                        feedback.innerHTML = '<span class="text-danger small">El texto NO coincide. Debes escribir exactamente "ELIMINAR TODO".</span>';
+                    }
+                }
+            });
+
+            confirmInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !confirmBtn.disabled) {
+                    ejecutarBorradoTotal();
+                }
+            });
+        }
+    });
+
+    function ejecutarBorradoTotal() {
+        const btn = document.getElementById('btnConfirmDeleteAll');
+        const feedback = document.getElementById('deleteAllFeedback');
+        const confirmText = document.getElementById('confirmText');
+
+        if (!btn || btn.disabled) return;
+
+        // Segunda verificación: alert nativa
+        if (!confirm('⚠️ ÚLTIMA ADVERTENCIA ⚠️\n\n¿Estás ABSOLUTAMENTE SEGURO de borrar TODOS los registros de la base de datos SQL?\n\nEsta es la ÚLTIMA oportunidad de cancelar. La acción NO se puede deshacer.')) {
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Borrando toda la base de datos...';
+        if (confirmText) confirmText.disabled = true;
+        feedback.innerHTML = '<div class="alert alert-warning py-2 small">⏳ Ejecutando borrado masivo...</div>';
+
+        fetch('/admin/eliminar_todos', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({confirmado: true})
+        })
+        .then(response => response.json().then(data => ({status: response.status, body: data})))
+        .then(({status, body}) => {
+            if (status === 200 && body.success) {
+                feedback.innerHTML = '<div class="alert alert-success py-2 small mb-0">✅ Base de datos vaciada. ' + (body.eliminados || '') + ' registros eliminados. Recargando...</div>';
+                setTimeout(function() {
+                    if (modalBorrarTodo) modalBorrarTodo.hide();
+                    location.reload();
+                }, 1800);
+            } else {
+                feedback.innerHTML = '<div class="alert alert-danger py-2 small mb-0">❌ Error: ' + (body.error || 'No autorizado o falló la operación') + '</div>';
+                btn.disabled = false;
+                btn.innerHTML = '🗑️ Sí, ELIMINAR TODO';
+                if (confirmText) confirmText.disabled = false;
+            }
+        })
+        .catch(err => {
+            feedback.innerHTML = '<div class="alert alert-danger py-2 small mb-0">❌ Error de red: ' + err.message + '</div>';
+            btn.disabled = false;
+            btn.innerHTML = '🗑️ Sí, ELIMINAR TODO';
+            if (confirmText) confirmText.disabled = false;
+        });
+    }
+
+    // Cerrar sesión admin
     function cerrarSesion() {
         fetch('/admin/logout').then(() => { window.location.href = '/'; }).catch(() => { window.location.href = '/'; });
     }
