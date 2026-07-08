@@ -198,6 +198,8 @@ ZONE_POSITIONS = {
     'E24->E21 VIA2': [{'top': 541, 'left': 553, 'width': 840, 'height': 27, 'label': 'E24->E21 VIA2'}],
     'E24->E22 VIA1': [{'top': 606, 'left': 819, 'width': 560, 'height': 31, 'label': 'E24->E22 VIA1'}],
     'E24->E22 VIA2': [{'top': 542, 'left': 820, 'width': 556, 'height': 29, 'label': 'E24->E22 VIA2'}],
+    'NTA': [{'top': 148, 'left': 552, 'width': 127, 'height': 57, 'label': 'NTA'}],
+    'NTP': [{'top': 148, 'left': 749, 'width': 278, 'height': 110, 'label': 'NTP'}],
 }
 
 
@@ -450,7 +452,7 @@ def _clasificar_zona(clave):
         return 'deposito'
     # PTSA: zonas del taller y via principal (TK1-TK7, D1, D2, PTSA y variantes)
     if z in ('D1', 'D2', 'PTSA', 'TK1', 'TK2', 'TK3', 'TK4', 'TK5', 'TK7',
-            'TK_TEST', 'TKTEST', 'TESTTRACK'):
+            'TK_TEST', 'TKTEST', 'TESTTRACK', 'NTA', 'NTP'):
         return 'ptsa'
     if z.startswith('PV'):
         return 'pozo'

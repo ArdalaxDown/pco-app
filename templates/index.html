@@ -1709,7 +1709,12 @@
             const x = (ev.clientX - contRect.left) * escalaX;
             const y = (ev.clientY - contRect.top) * escalaY;
 
-            const candidatas = zonasEnPunto(x, y);
+            let candidatas = zonasEnPunto(x, y);
+            // Filtrar por el filtro activo del mapa
+            const filtroClic = selectorZonaState.filtroMapa || 'todos';
+            if (filtroClic !== 'todos') {
+                candidatas = candidatas.filter(c => c.cat === filtroClic);
+            }
             if (candidatas.length === 0) {
                 toggleZonaManual(zonaClic.clave, !selectorZonaState.seleccion.has(zonaClic.clave));
                 return;
@@ -1792,8 +1797,10 @@
                 'tramo_via': '↔️ Tramos por Vía (VIA1 / VIA2)'
             };
             const cats = selectorZonaState.catalogo.categorias;
+            const filtroChips = selectorZonaState.filtroMapa || 'todos';
             Object.entries(cats).forEach(([cat, items]) => {
                 if (!items.length) return;
+                if (filtroChips !== 'todos' && cat !== filtroChips) return;
                 const wrapper = document.createElement('div');
                 wrapper.className = 'mb-2';
                 wrapper.innerHTML = '<div class="small fw-bold text-muted text-uppercase" style="font-size:0.68rem;letter-spacing:0.5px;">' + (titulos[cat] || cat) + '</div>';
