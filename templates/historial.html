@@ -132,7 +132,7 @@
                     </div>
                     <div class="col-md-3">
                         <label class="form-label-l2">Buscar</label>
-                        <input type="text" class="form-control form-control-sm" name="buscar_texto" value="{{ buscar_texto }}" placeholder="Capataz, zona, máquina...">
+                        <input type="text" class="form-control form-control-sm" name="buscar_texto" value="{{ buscar_texto }}" placeholder="OT, capataz, zona, máquina, conductor...">
                     </div>
                     <div class="col-md-2">
                         <label class="form-label-l2">Hora Inic. (desde)</label>
@@ -160,16 +160,40 @@
 
         <!-- TABLA DE RESULTADOS -->
         <div class="card card-pco">
-            <div class="card-header bg-ml-blue">📄 Registros Encontrados ({{ registros|length }})</div>
+            <div class="card-header bg-ml-blue d-flex justify-content-between align-items-center">
+                <span>📄 Registros Encontrados ({{ registros|length }})</span>
+            </div>
+            <!-- BARRA DE FILTRO/ORDEN DEL HISTORIAL -->
+            <div class="card-body border-bottom" style="background:#FAFBFC;">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-6">
+                        <input type="text" id="filtroHistorial" class="form-control form-control-sm" placeholder="🔎 Filtrar resultados por OT, empresa, responsable, zona..." oninput="filtrarHistorial()">
+                    </div>
+                    <div class="col-md-3">
+                        <select id="ordenHistorial" class="form-select form-select-sm" onchange="filtrarHistorial()">
+                            <option value="fecha_desc">Orden: Fecha (más reciente)</option>
+                            <option value="fecha_asc">Orden: Fecha (más antiguo)</option>
+                            <option value="ot_asc">Orden: OT (A→Z)</option>
+                            <option value="ot_desc">Orden: OT (Z→A)</option>
+                            <option value="empresa_asc">Orden: Empresa (A→Z)</option>
+                            <option value="responsable_asc">Orden: Responsable (A→Z)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <span class="badge bg-light text-secondary border" id="contadorHistorial">0 visibles</span>
+                    </div>
+                </div>
+            </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0 text-center align-middle small table-pco">
+                    <table class="table table-hover mb-0 text-center align-middle small table-pco" id="tabla-historial">
                         <thead>
                             <tr>
                                 <th>Fecha</th>
                                 <th>Turno</th>
                                 <th>Horarios</th>
                                 <th>Empresa</th>
+                                <th>Ord. Trabajo</th>
                                 <th>Responsable / ZONA</th>
                                 <th>Vehículo</th>
                                 <th>Personal PCO</th>
@@ -179,7 +203,13 @@
                         </thead>
                         <tbody>
                             {% for r in registros %}
-                            <tr>
+                            <tr class="fila-historial"
+                                data-ot="{{ (r[4] or '') }}"
+                                data-empresa="{{ (r[3] or '') }}"
+                                data-responsable="{{ (r[5] or '') }}"
+                                data-zona="{{ (r[6] or '') }}"
+                                data-fecha="{{ r[1].strftime('%Y-%m-%d') if r[1] else '' }}"
+                                data-inicio="{{ r[9].strftime('%H:%M:%S') if r[9] else '' }}">
                                 <td class="text-nowrap fw-bold">{{ r[1].strftime('%Y-%m-%d') if r[1] else '' }}</td>
                                 <td><span class="badge bg-light text-dark border">{{ r[2] }}</span></td>
                                 <td class="text-start">
@@ -187,6 +217,7 @@
                                     <strong>Fin:</strong> {{ r[10].strftime('%H:%M:%S') if r[10] else 'En Vía' }}
                                 </td>
                                 <td><strong>{{ r[3] }}</strong></td>
+                                <td><span class="badge" style="background:var(--ml-cyan);color:#fff;">{{ r[4] or '—' }}</span></td>
                                 <td class="text-start">
                                     <div class="fw-bold" style="color:var(--ml-red);">{{ r[5] }}</div>
                                     <div class="fw-bold text-danger">{{ r[6] }}</div>
@@ -195,7 +226,7 @@
                                 <td>
                                     {% if r[12] %}
                                         <div class="border rounded px-2 py-1 text-start" style="border-color:var(--ml-red)!important;">
-                                            <strong style="color:var(--ml-red);">{{ r[13] }} - {{ r[14] }}</strong><br>
+                                            <strong style="color:var(--ml-red);">{{ r[13] }} {{ r[14] }}</strong><br>
                                             <span class="text-muted">Cond: {{ r[15] }}</span>
                                         </div>
                                     {% else %}
@@ -220,8 +251,8 @@
                                 </td>
                             </tr>
                             {% else %}
-                            <tr>
-                                <td colspan="9" class="text-muted py-5 text-center">No se encontraron registros con los filtros aplicados.</td>
+                            <tr id="historialVacio">
+                                <td colspan="10" class="text-muted py-5 text-center">No se encontraron registros con los filtros aplicados.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -232,6 +263,47 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function filtrarHistorial() {
+            const tbody = document.querySelector('#tabla-historial tbody');
+            if (!tbody) return;
+            const filas = Array.from(tbody.querySelectorAll('tr.fila-historial'));
+            if (filas.length === 0) return;
+
+            const texto = (document.getElementById('filtroHistorial')?.value || '').toLowerCase().trim();
+            const orden = document.getElementById('ordenHistorial')?.value || 'fecha_desc';
+
+            let visibles = 0;
+            filas.forEach(f => {
+                const ot = (f.dataset.ot || '').toLowerCase();
+                const emp = (f.dataset.empresa || '').toLowerCase();
+                const resp = (f.dataset.responsable || '').toLowerCase();
+                const zona = (f.dataset.zona || '').toLowerCase();
+                const hit = !texto ||
+                    ot.includes(texto) || emp.includes(texto) ||
+                    resp.includes(texto) || zona.includes(texto);
+                if (hit) { f.style.display = ''; visibles++; }
+                else { f.style.display = 'none'; }
+            });
+
+            const cmp = {
+                'fecha_desc':     (a, b) => (b.dataset.fecha + ' ' + b.dataset.inicio).localeCompare(a.dataset.fecha + ' ' + a.dataset.inicio),
+                'fecha_asc':      (a, b) => (a.dataset.fecha + ' ' + a.dataset.inicio).localeCompare(b.dataset.fecha + ' ' + b.dataset.inicio),
+                'ot_asc':         (a, b) => (a.dataset.ot || '').localeCompare(b.dataset.ot || '', undefined, {numeric:true}),
+                'ot_desc':        (a, b) => (b.dataset.ot || '').localeCompare(a.dataset.ot || '', undefined, {numeric:true}),
+                'empresa_asc':    (a, b) => (a.dataset.empresa || '').localeCompare(b.dataset.empresa || ''),
+                'responsable_asc':(a, b) => (a.dataset.responsable || '').localeCompare(b.dataset.responsable || ''),
+            }[orden];
+            if (cmp) {
+                filas.sort(cmp);
+                filas.forEach(f => tbody.appendChild(f));
+            }
+
+            const cont = document.getElementById('contadorHistorial');
+            if (cont) cont.textContent = visibles + ' visible(s)';
+        }
+        document.addEventListener('DOMContentLoaded', filtrarHistorial);
+    </script>
 
     <!-- Footer discreto - acceso admin -->
     <div style="position:fixed;bottom:4px;left:6px;z-index:1000;opacity:0.18;transition:opacity 0.3s;" onmouseover="this.style.opacity='0.55'" onmouseout="this.style.opacity='0.18'">

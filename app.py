@@ -468,6 +468,49 @@ def verificar_safety():
         "mensaje": mensaje
     })
 
+@app.route('/verificar_ot_duplicada', methods=['POST'])
+def verificar_ot_duplicada():
+    """Valida en tiempo real si una Orden de Trabajo ya esta activa
+    (hora_fin IS NULL). Devuelve {duplicada: bool, mensaje: str}."""
+    data = request.get_json() or {}
+    ot = (data.get('orden_trabajo') or '').strip()
+    if not ot or ot == '-':
+        return jsonify({'duplicada': False, 'mensaje': ''})
+
+    conn = None
+    cur = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, empresa, responsable, ubicacion_zona, hora_inicio
+            FROM seguimiento_vias
+            WHERE orden_trabajo ILIKE %s AND hora_fin IS NULL
+            LIMIT 1;
+        """, (ot,))
+        dup = cur.fetchone()
+    except (OperationalError, DatabaseError) as e:
+        app.logger.error(f"verificar_ot_duplicada DB error: {e}")
+        # En caso de error de BD, NO bloqueamos al usuario (mejor dejar
+        # intentar el submit y que el handler de /ingresar decida).
+        return jsonify({'duplicada': False, 'mensaje': '', 'db_error': True})
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+    if not dup:
+        return jsonify({'duplicada': False, 'mensaje': ''})
+
+    dup_id, dup_emp, dup_resp, dup_zona, dup_hora = dup
+    hora_str = dup_hora.strftime('%H:%M:%S') if dup_hora else 'N/R'
+    msg = (f'⚠️ La OT "{ot}" ya existe como trabajo ACTIVO (ID {dup_id}, '
+           f'Empresa: {dup_emp}, Responsable: {dup_resp}, Zona: {dup_zona}, '
+           f'Inicio: {hora_str}). Libera o elimina ese registro antes de '
+           f'reingresar la OT.')
+    return jsonify({'duplicada': True, 'mensaje': msg})
+
 @app.route('/ingresar', methods=['POST'])
 def ingresar():
     if request.method == 'POST':
@@ -519,6 +562,34 @@ def ingresar():
             conn.close()
             flash(mensaje_alerta, "danger")
             return redirect(url_for('index'))
+
+        # --- VALIDACIÓN: OT duplicada contra trabajos activos ---
+        # No se permite ingresar un permiso de trabajo cuya OT ya existe en
+        # la lista de monitoreo en tiempo real (hora_fin IS NULL). Las OTs
+        # liberadas/archivadas SI pueden reingresar (no cuentan como dup).
+        ot_normalizada = (orden_trabajo or '').strip().upper()
+        if ot_normalizada and ot_normalizada != '-':
+            cur.execute("""
+                SELECT id, empresa, responsable, ubicacion_zona, hora_inicio
+                FROM seguimiento_vias
+                WHERE orden_trabajo ILIKE %s AND hora_fin IS NULL
+                LIMIT 1;
+            """, (ot_normalizada,))
+            dup = cur.fetchone()
+            if dup:
+                cur.close()
+                conn.close()
+                dup_id, dup_emp, dup_resp, dup_zona, dup_hora = dup
+                msg = (f"⚠️ Ya existe un permiso ACTIVO con la Orden de Trabajo "
+                       f"'{orden_trabajo}'. No se puede duplicar.\n\n"
+                       f"Registro existente: ID {dup_id} · Empresa: {dup_emp} · "
+                       f"Responsable: {dup_resp} · Zona: {dup_zona} · Inicio: "
+                       f"{dup_hora.strftime('%H:%M:%S') if dup_hora else 'N/R'}.\n\n"
+                       f"Libera o elimina ese registro antes de reingresar la OT.")
+                flash(msg, "warning")
+                # Mantener el formulario para que el usuario corrija
+                session['form_previo'] = request.form.to_dict()
+                return redirect(url_for('index'))
 
         # --- SI NO HAY PELIGRO, SE INSERTA NORMAL ---
         cur.execute("""
@@ -757,9 +828,9 @@ def historial():
         query += " AND empresa = %s"
         params.append(empresa)
     if buscar_texto:
-        query += " AND (responsable ILIKE %s OR ubicacion_zona ILIKE %s OR codigo_vehiculo ILIKE %s OR conductor_vehiculo ILIKE %s)"
+        query += " AND (responsable ILIKE %s OR orden_trabajo ILIKE %s OR ubicacion_zona ILIKE %s OR codigo_vehiculo ILIKE %s OR conductor_vehiculo ILIKE %s)"
         term = f"%{buscar_texto}%"
-        params.extend([term, term, term, term])
+        params.extend([term, term, term, term, term])
     if hora_inicio_desde and hora_inicio_hasta and hora_inicio_desde <= hora_inicio_hasta:
         # Rango simple dentro del mismo dia: 05:00 a 17:00
         query += " AND hora_inicio >= %s AND hora_inicio <= %s"
@@ -821,9 +892,9 @@ def exportar_historial():
         query += " AND empresa = %s"
         params.append(empresa)
     if buscar_texto:
-        query += " AND (responsable ILIKE %s OR ubicacion_zona ILIKE %s OR codigo_vehiculo ILIKE %s OR conductor_vehiculo ILIKE %s OR comentario ILIKE %s)"
+        query += " AND (responsable ILIKE %s OR orden_trabajo ILIKE %s OR ubicacion_zona ILIKE %s OR codigo_vehiculo ILIKE %s OR conductor_vehiculo ILIKE %s OR comentario ILIKE %s)"
         term = f"%{buscar_texto}%"
-        params.extend([term, term, term, term, term])
+        params.extend([term, term, term, term, term, term])
 
     query += " ORDER BY fecha ASC, hora_inicio ASC;"
 
@@ -1347,6 +1418,41 @@ def confirmar_importado():
         try:
             conn = get_db_connection()
             cur = conn.cursor()
+
+            # --- VALIDACIÓN: OT duplicada contra trabajos activos ---
+            ot_normalizada = (orden_trabajo or '').strip()
+            if ot_normalizada and ot_normalizada != '-':
+                cur.execute("""
+                    SELECT id, empresa, responsable, ubicacion_zona, hora_inicio
+                    FROM seguimiento_vias
+                    WHERE orden_trabajo ILIKE %s AND hora_fin IS NULL
+                    LIMIT 1;
+                """, (ot_normalizada,))
+                dup = cur.fetchone()
+                if dup:
+                    dup_id, dup_emp, dup_resp, dup_zona, dup_hora = dup
+                    hora_str = dup_hora.strftime('%H:%M:%S') if dup_hora else 'N/R'
+                    # IMPORTANTE: NO eliminamos el item de la sesión ni
+                    # tocamos la fila de la tabla preview. Solo devolvemos
+                    # success=False con el mensaje, así el frontend restaura
+                    # el checkbox y la fila sigue lista para reintentar.
+                    cur.close()
+                    cur = None
+                    conn.close()
+                    conn = None
+                    return jsonify({
+                        'success': False,
+                        'duplicada': True,
+                        'error': (
+                            f'⚠️ La OT "{orden_trabajo}" ya existe como trabajo '
+                            f'ACTIVO. No se puede duplicar.\n\n'
+                            f'Registro existente: ID {dup_id} · Empresa: {dup_emp} · '
+                            f'Responsable: {dup_resp} · Zona: {dup_zona} · '
+                            f'Inicio: {hora_str}.\n\n'
+                            f'Libera o elimina ese registro antes de confirmar este.'
+                        )
+                    }), 400
+
             cur.execute("""
                 INSERT INTO seguimiento_vias 
                 (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, fecha, hora_inicio, estado, comentario)

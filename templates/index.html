@@ -273,6 +273,8 @@
 
                             <!-- ALERTA REALTIME DE SAFETY -->
                             <div id="realtime-safety-alert" class="alert alert-danger d-none fw-bold small py-2 my-2 shadow-sm border border-danger"></div>
+                            <!-- ALERTA REALTIME DE OT DUPLICADA -->
+                            <div id="realtime-ot-alert" class="alert alert-warning d-none fw-bold small py-2 my-2 shadow-sm border border-warning"></div>
 
                             <button type="submit" id="btnAutorizar" class="btn w-100 fw-bold py-2 mt-2 btn-ml-red" {% if not operador_actual %}disabled{% endif %}>AUTORIZAR INGRESO</button>
                         </form>
@@ -293,6 +295,17 @@
                         </div>
                     </div>
                     <div class="card-body p-0">
+                        <!-- BARRA DE FILTRO DE IMPORTADOS PENDIENTES -->
+                        <div class="px-2 py-2 border-bottom" style="background:#FAFBFC;">
+                            <div class="row g-2 align-items-center">
+                                <div class="col-md-8">
+                                    <input type="text" id="filtroImportados" class="form-control form-control-sm" placeholder="🔎 Filtrar pendientes por OT, empresa, responsable, zona..." oninput="filtrarTablaImportados()">
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <span class="badge bg-light text-secondary border" id="contadorImportados">0 pendientes visibles</span>
+                                </div>
+                            </div>
+                        </div>
                         <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
                             <table class="table table-hover mb-0 text-center align-middle">
                                 <thead class="text-nowrap" style="position: sticky; top: 0; z-index: 1; background:var(--ml-cyan);color:#fff;">
@@ -342,6 +355,27 @@
                         </form>
                     </div>
 
+                    <!-- BARRA DE FILTRO/ORDEN DE LA TABLA DE MONITOREO -->
+                    <div class="card-body border-bottom" style="background:#FAFBFC;">
+                        <div class="row g-2 align-items-center">
+                            <div class="col-md-6">
+                                <input type="text" id="filtroMonitoreo" class="form-control form-control-sm" placeholder="🔎 Buscar por OT, empresa, responsable, zona..." oninput="filtrarTablaMonitoreo()">
+                            </div>
+                            <div class="col-md-3">
+                                <select id="ordenMonitoreo" class="form-select form-select-sm" onchange="filtrarTablaMonitoreo()">
+                                    <option value="inicio_desc">Orden: Inicio (más reciente)</option>
+                                    <option value="inicio_asc">Orden: Inicio (más antiguo)</option>
+                                    <option value="ot_asc">Orden: OT (A→Z)</option>
+                                    <option value="ot_desc">Orden: OT (Z→A)</option>
+                                    <option value="empresa_asc">Orden: Empresa (A→Z)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 text-end">
+                                <span class="badge bg-light text-secondary border" id="contadorMonitoreo">0 trabajos visibles</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="card-body p-0">
                         <div class="table-responsive">
                             <table class="table table-hover mb-0 text-center align-middle table-pco" id="tabla-monitoreo">
@@ -360,7 +394,14 @@
                                 </thead>
                                 <tbody>
                                     {% for r in registros %}
-                                    <tr class="{% if r[12] %}table-light opacity-75 text-muted{% endif %}">
+                                    <tr class="fila-monitoreo {% if r[12] %}table-light opacity-75 text-muted{% endif %}"
+                                        data-ot="{{ (r[4] or '') }}"
+                                        data-empresa="{{ (r[3] or '') }}"
+                                        data-responsable="{{ (r[5] or '') }}"
+                                        data-zona="{{ (r[6] or '') }}"
+                                        data-inicio="{{ r[11].strftime('%H:%M:%S') if r[11] else '' }}"
+                                        data-estado="{% if r[12] %}Liberado{% else %}En Vía{% endif %}"
+                                        data-id="{{ r[0] }}">
                                         <td><span class="badge" style="background:var(--ml-blue);color:#fff;">{{ r[11].strftime('%H:%M:%S') if r[11] else '' }}</span></td>
                                         <td>
                                             {% if r[12] %}
@@ -543,6 +584,7 @@
             const selectTipo = document.querySelector('[name="tipo_vehiculo"]');
             const inputCodigo = document.querySelector('[name="codigo_vehiculo"]');
             const inputEmpresa = document.querySelector('[name="empresa"]');
+            const inputOT = document.querySelector('input[name="orden_trabajo"]');
 
             if (inputUbicacion) {
                 inputUbicacion.addEventListener('input', verificarSafetyRealtime);
@@ -562,6 +604,15 @@
             if (inputEmpresa) {
                 inputEmpresa.addEventListener('input', verificarSafetyRealtime);
             }
+            // Validacion en tiempo real de OT duplicada
+            if (inputOT) {
+                let otDebounce;
+                inputOT.addEventListener('input', () => {
+                    clearTimeout(otDebounce);
+                    otDebounce = setTimeout(verificarOTDuplicadaRealtime, 300);
+                });
+                inputOT.addEventListener('blur', verificarOTDuplicadaRealtime);
+            }
 
             const fileInput = document.getElementById('excelFileInput');
             if (fileInput) {
@@ -572,6 +623,45 @@
                 });
             }
         });
+
+        function verificarOTDuplicadaRealtime() {
+            const inputOT = document.querySelector('input[name="orden_trabajo"]');
+            if (!inputOT) return;
+            const ot = inputOT.value.trim();
+            const alertDiv = document.getElementById('realtime-ot-alert');
+            const btnSubmit = document.getElementById('btnAutorizar');
+
+            if (!ot || ot === '-') {
+                if (alertDiv) { alertDiv.classList.add('d-none'); alertDiv.innerText = ''; }
+                return;
+            }
+
+            fetch('/verificar_ot_duplicada', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ orden_trabajo: ot })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (!alertDiv) return;
+                if (data.duplicada) {
+                    alertDiv.innerText = data.mensaje;
+                    alertDiv.classList.remove('d-none');
+                    if (btnSubmit) btnSubmit.setAttribute('disabled', 'true');
+                } else {
+                    alertDiv.classList.add('d-none');
+                    alertDiv.innerText = '';
+                    // Solo rehabilitamos si no hay bloqueo de safety activo
+                    const safetyAlert = document.getElementById('realtime-safety-alert');
+                    if (safetyAlert && safetyAlert.classList.contains('d-none')) {
+                        {% if operador_actual %}
+                        if (btnSubmit) btnSubmit.removeAttribute('disabled');
+                        {% endif %}
+                    }
+                }
+            })
+            .catch(err => { console.error('Error al verificar OT:', err); });
+        }
 
         function importarExcel(file) {
             const formData = new FormData();
@@ -811,6 +901,11 @@
             .then(result => {
                 if (!result.success) {
                     checkbox.checked = false;
+                    // Resaltar la fila si fue por OT duplicada
+                    if (result.duplicada && row) {
+                        row.style.backgroundColor = '#fff3cd';
+                        setTimeout(() => { if (row) row.style.backgroundColor = ''; }, 2500);
+                    }
                     alert('Error al confirmar: ' + (result.error || 'Error desconocido. Recarga la página y reintenta.'));
                     return;
                 }
@@ -883,6 +978,79 @@
                 alert('Error de conexión: ' + err.message);
             });
         }
+
+        // ====== FILTRO Y ORDEN DE LA TABLA DE MONITOREO ======
+        function filtrarTablaMonitoreo() {
+            const tbody = document.querySelector('#tabla-monitoreo tbody');
+            if (!tbody) return;
+            const filas = Array.from(tbody.querySelectorAll('tr.fila-monitoreo'));
+            // Si no hay filas reales (sólo la fila vacía colspan), no hacer nada
+            if (filas.length === 0) return;
+
+            const texto = (document.getElementById('filtroMonitoreo')?.value || '').toLowerCase().trim();
+            const orden = document.getElementById('ordenMonitoreo')?.value || 'inicio_desc';
+
+            // 1) Filtrar
+            let visibles = 0;
+            filas.forEach(f => {
+                const ot = (f.dataset.ot || '').toLowerCase();
+                const emp = (f.dataset.empresa || '').toLowerCase();
+                const resp = (f.dataset.responsable || '').toLowerCase();
+                const zona = (f.dataset.zona || '').toLowerCase();
+                const hit = !texto ||
+                    ot.includes(texto) || emp.includes(texto) ||
+                    resp.includes(texto) || zona.includes(texto);
+                if (hit) {
+                    f.style.display = '';
+                    visibles++;
+                } else {
+                    f.style.display = 'none';
+                }
+            });
+
+            // 2) Ordenar (reordenamos los nodos en el DOM)
+            const cmp = {
+                'inicio_desc': (a, b) => (b.dataset.inicio || '').localeCompare(a.dataset.inicio || ''),
+                'inicio_asc':  (a, b) => (a.dataset.inicio || '').localeCompare(b.dataset.inicio || ''),
+                'ot_asc':      (a, b) => (a.dataset.ot || '').localeCompare(b.dataset.ot || '', undefined, {numeric:true}),
+                'ot_desc':     (a, b) => (b.dataset.ot || '').localeCompare(a.dataset.ot || '', undefined, {numeric:true}),
+                'empresa_asc': (a, b) => (a.dataset.empresa || '').localeCompare(b.dataset.empresa || ''),
+            }[orden];
+            if (cmp) {
+                filas.sort(cmp);
+                filas.forEach(f => tbody.appendChild(f));
+            }
+
+            // 3) Actualizar contador
+            const cont = document.getElementById('contadorMonitoreo');
+            if (cont) cont.textContent = visibles + ' trabajo(s) visible(s)';
+        }
+
+        // ====== FILTRO DE LA TABLA DE IMPORTADOS PENDIENTES ======
+        function filtrarTablaImportados() {
+            const tbody = document.getElementById('importPreviewBody');
+            if (!tbody) return;
+            const texto = (document.getElementById('filtroImportados')?.value || '').toLowerCase().trim();
+            const filas = Array.from(tbody.querySelectorAll('tr'));
+            let visibles = 0;
+            filas.forEach(f => {
+                const txt = (f.textContent || '').toLowerCase();
+                if (!texto || txt.includes(texto)) {
+                    f.style.display = '';
+                    visibles++;
+                } else {
+                    f.style.display = 'none';
+                }
+            });
+            const cont = document.getElementById('contadorImportados');
+            if (cont) cont.textContent = visibles + ' pendiente(s) visible(s)';
+        }
+
+        // Al cargar la página, inicializar contadores
+        document.addEventListener('DOMContentLoaded', () => {
+            filtrarTablaMonitoreo();
+            filtrarTablaImportados();
+        });
     </script>
 
     <!-- Footer discreto - acceso admin -->
