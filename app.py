@@ -427,6 +427,186 @@ def mapa():
 def coordenadas():
     return render_template('coordinate_finder.html')
 
+
+def _clasificar_zona(clave):
+    """Clasifica una clave de ZONE_POSITIONS en una categoria para el
+    selector interactivo de zonas.
+    Devuelve uno de: 'estacion', 'pozo', 'tunel', 'via', 'deposito',
+    'tramo', 'tramo_via', 'otro'."""
+    z = (clave or '').upper().strip()
+    if '->' in z and 'VIA' in z:
+        return 'tramo_via'
+    if '->' in z:
+        return 'tramo'
+    if z in ('D1', 'D2', 'ZM'):
+        return 'deposito'
+    if z in ('TK1', 'TK2', 'TK3', 'TK4', 'TK5', 'TK7',
+            'TK_TEST', 'TKTEST', 'TESTTRACK', 'PTSA'):
+        return 'tunel'
+    if z.startswith('PV'):
+        return 'pozo'
+    if z.startswith('E2') and len(z) <= 3:
+        return 'estacion'
+    if 'VIA' in z:
+        return 'via'
+    return 'otro'
+
+
+@app.route('/api/zonas_catalogo')
+def api_zonas_catalogo():
+    """Devuelve el catalogo de zonas admisibles (claves de ZONE_POSITIONS)
+    agrupadas por categoria, mas los rects (coordenadas en el mapa_real.png)
+    de cada zona. Lo consume el modal 'Selector de Zona' interactivo para
+    dibujar areas clicables y para sugerir chips agrupados.
+
+    Estructura de la respuesta:
+        {
+          'categorias': {
+            'estacion': [ {'clave': 'E20', 'rects': [{top,left,width,height,label}, ...]}, ... ],
+            'pozo': [...],
+            'tunel': [...],
+            'deposito': [...],
+            'tramo': [...],
+            'tramo_via': [...]
+          },
+          'origenes_tramo': ['E20', 'E21', 'E22', 'E23', 'E24'],
+          'destinos_tramo': { 'E20': ['E21','E22', ...], ... },
+          'plano_size': {'width': 1700, 'height': 820}
+        }
+    """
+    CATEGORIAS_VISIBLES = ['estacion', 'pozo', 'tunel', 'deposito',
+                          'tramo', 'tramo_via']
+    agrupado = {cat: [] for cat in CATEGORIAS_VISIBLES}
+
+    for clave, entry in ZONE_POSITIONS.items():
+        cat = _clasificar_zona(clave)
+        if cat not in agrupado:
+            cat = 'otro'  # no devolvemos 'otro' al frontend
+            continue
+        # Normalizar entry a lista de dicts
+        if isinstance(entry, list):
+            rects = entry
+        else:
+            rects = [entry]
+        agrupado[cat].append({'clave': clave, 'rects': rects})
+
+    # Origenes y destinos validos para el selector de tramo (E20-E24)
+    origenes_posibles = ['E20', 'E21', 'E22', 'E23', 'E24']
+    destinos = {}
+    for o in origenes_posibles:
+        destinos[o] = []
+        prefijo = o + '->'
+        for clave in ZONE_POSITIONS.keys():
+            z = (clave or '').upper()
+            if z.startswith(prefijo) and 'VIA' not in z:
+                dest = z[len(prefijo):].strip()
+                if dest and dest not in destinos[o]:
+                    destinos[o].append(dest)
+
+    return jsonify({
+        'categorias': agrupado,
+        'origenes_tramo': origenes_posibles,
+        'destinos_tramo': destinos,
+        'plano_size': {'width': 1700, 'height': 820}
+    })
+
+
+@app.route('/api/validar_zonas', methods=['POST'])
+def api_validar_zonas():
+    """Valida si las partes de una cadena de ubicacion_zona son reconocidas
+    por el diccionario ZONE_POSITIONS. Usado por el modal de selector y por
+    la importacion para detectar zonas escritas a mano que no apareceran
+    en el mapa.
+
+    body JSON: {'ubicacion_zona': 'ESTACION22 -> ESTACION 24, TK1'}
+    respuesta: {
+        'partes': [
+            {'texto': 'ESTACION22 -> ESTACION 24', 'valida': False, 'sugerencia': 'E22->E24'},
+            {'texto': 'TK1', 'valida': True, 'sugerencia': null}
+        ],
+        'todas_validas': False
+    }"""
+    data = request.get_json(silent=True) or {}
+    cadena = data.get('ubicacion_zona', '') or ''
+
+    def _norm_zone(s):
+        s = (s or '').strip().upper()
+        # quitar tildes
+        s = s.replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+        # normalizar guiones/puntuacion tipicos del usuario
+        s = s.replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U')
+        return s
+
+    # Sinonimos comunes del Excel -> formato interno. Sirve para sugerir la
+    # correccion sin alterar lo que el usuario escribio en el Excel.
+    SINONIMOS = {
+        'ESTACION20': 'E20', 'ESTACION21': 'E21', 'ESTACION22': 'E22',
+        'ESTACION23': 'E23', 'ESTACION24': 'E24', 'EST20': 'E20',
+        'EST21': 'E21', 'EST22': 'E22', 'EST23': 'E23', 'EST24': 'E24',
+        'ESTACIÓN20': 'E20', 'ESTACIÓN21': 'E21', 'ESTACIÓN22': 'E22',
+        'ESTACIÓN23': 'E23', 'ESTACIÓN24': 'E24',
+        'TK-1': 'TK1', 'TK-2': 'TK2', 'TK-3': 'TK3', 'TK-4': 'TK4',
+        'TK-5': 'TK5', 'TK-7': 'TK7',
+        'CAJATIPO1': 'D1', 'CAJATIPO1RAMALD1': 'D1', 'CAJATIPO2': 'D2',
+        'CAJATIPO1RAMALD2': 'D2', 'RAMALD1': 'D1', 'RAMALD2': 'D2',
+    }
+
+    partes = [p.strip() for p in cadena.replace(',', '+').split('+') if p.strip()]
+    resultado = []
+    todas_validas = True
+    for idx, p in enumerate(partes):
+        n = _norm_zone(p)
+        # 1) match directo
+        if n in ZONE_POSITIONS or n.replace(' ', '') in ZONE_POSITIONS:
+            resultado.append({'texto': p, 'valida': True, 'sugerencia': None})
+            continue
+        # 2) sinonimo
+        if n.replace(' ', '') in SINONIMOS:
+            sug = SINONIMOS[n.replace(' ', '')]
+            resultado.append({'texto': p, 'valida': False, 'sugerencia': sug})
+            todas_validas = False
+            continue
+        # 3) intentar corregir tramos con 'A', '/' o '-> ' mal escritos
+        #    ej: "ESTACION22 A ESTACION24" -> "E22->E24"
+        #    Buscar ESTACION<n> -> E<n> en cualquier parte
+        m = re.match(r'^(?:ESTACION|EST|ESTACIÓN)\s*2?([0-4])\s*(?:A|->|HASTA|-|→|AL)\s*(?:ESTACION|EST|ESTACIÓN)?\s*2?([0-4])$', n, re.IGNORECASE)
+        if m:
+            org, dst = m.group(1), m.group(2)
+            sug = f'E2{org}->E2{dst}'
+            if sug in ZONE_POSITIONS:
+                resultado.append({'texto': p, 'valida': False, 'sugerencia': sug})
+                todas_validas = False
+                continue
+        # 3b) "EST 23 -> E24" -> EYYYY->EYYYY
+        m2 = re.match(r'^(?:ESTACION|EST|ESTACIÓN)\s*2([0-4])\s*(?:A|->|HASTA|-|→|AL)\s*E2([0-4])$', n, re.IGNORECASE)
+        if m2:
+            org, dst = m2.group(1), m2.group(2)
+            sug = f'E2{org}->E2{dst}'
+            if sug in ZONE_POSITIONS:
+                resultado.append({'texto': p, 'valida': False, 'sugerencia': sug})
+                todas_validas = False
+                continue
+        # 4) match parcial: si empieza con E2[0-4] y contiene ->, validar el prefijo
+        if '->' in n:
+            pre = n.split('->')[0].strip()
+            if pre in ZONE_POSITIONS or SINONIMOS.get(pre.replace(' ', '')) in ZONE_POSITIONS:
+                resultado.append({'texto': p, 'valida': False, 'sugerencia': 'revisar tramo'})
+            else:
+                resultado.append({'texto': p, 'valida': False, 'sugerencia': None})
+            todas_validas = False
+            continue
+        # 5) tunel/perdigon suelto mal escrito
+        if 'TK' in n and n.replace('-', '').replace(' ', '') in ZONE_POSITIONS:
+            sug = n.replace('-', '').replace(' ', '')
+            resultado.append({'texto': p, 'valida': False, 'sugerencia': sug})
+            todas_validas = False
+            continue
+        # 6) no reconocido
+        resultado.append({'texto': p, 'valida': False, 'sugerencia': None})
+        todas_validas = False
+
+    return jsonify({'partes': resultado, 'todas_validas': todas_validas})
+
 @app.route('/configurar_turno', methods=['POST'])
 def configurar_turno():
     session['turno'] = request.form['turno']

@@ -157,6 +157,98 @@
         </div>
     </div>
 
+    <!-- ====== MODAL SELECTOR DE ZONA (mini-mapa interactivo + chips) ====== -->
+    <div class="modal fade" id="modalSelectorZona" tabindex="-1" aria-labelledby="modalSelectorZonaLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content" style="border:2px solid var(--ml-cyan);">
+                <div class="modal-header bg-ml-cyan text-white">
+                    <h5 class="modal-title fw-bold" id="modalSelectorZonaLabel">🗺️ Selector de Zona de Trabajo</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Pestañas -->
+                    <ul class="nav nav-tabs nav-fill mb-3" id="selectorZonaTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active fw-bold" id="tab-mapa-tab" data-bs-toggle="tab" data-bs-target="#tab-mapa" type="button" role="tab">🗺️ Mini-mapa</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold" id="tab-chips-tab" data-bs-toggle="tab" data-bs-target="#tab-chips" type="button" role="tab">🏷️ Botones por categoría</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link fw-bold" id="tab-tramo-tab" data-bs-toggle="tab" data-bs-target="#tab-tramo" type="button" role="tab">↔️ Tramo Origen→Destino</button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content">
+                        <!-- TAB 1: MINI-MAPA CLICABLE -->
+                        <div class="tab-pane fade show active" id="tab-mapa" role="tabpanel">
+                            <p class="small text-muted mb-2">Haz <strong>clic</strong> sobre una zona del plano para agregarla. <strong>Clic again</strong> (sobre una zona ya seleccionada) para quitarla. Las áreas admitidas aparecen al pasar el mouse.</p>
+                            <div class="border rounded overflow-auto bg-dark" style="max-height: 60vh;">
+                                <div id="selectorZonaPlano" class="position-relative" style="width:1700px;height:820px;background-image:url('/static/mapa_real.png');background-size:contain;background-repeat:no-repeat;">
+                                    <!-- las areas clicables se inyectan via JS -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 2: CHIPS POR CATEGORIA -->
+                        <div class="tab-pane fade" id="tab-chips" role="tabpanel">
+                            <p class="small text-muted mb-2">Selecciona las zonas necesarias con un clic. Cada chip agrega una zona a la selección.</p>
+                            <div id="selectorZonaChips"></div>
+                        </div>
+
+                        <!-- TAB 3: TRAMO ORIGEN -> DESTINO -->
+                        <div class="tab-pane fade" id="tab-tramo" role="tabpanel">
+                            <p class="small text-muted mb-2">Para trabajos que cubren una sección entre dos estaciones o pozos. Genera automáticamente un tramo válido como <code>E20->E24</code>.</p>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-4">
+                                    <label class="form-label-l2">Estación / Pozo origen</label>
+                                    <select id="selTramoOrigen" class="form-select form-select-sm"></select>
+                                </div>
+                                <div class="col-md-1 text-center fw-bold">→</div>
+                                <div class="col-md-4">
+                                    <label class="form-label-l2">Estación / Pozo destino</label>
+                                    <select id="selTramoDestino" class="form-select form-select-sm"></select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label-l2">Vía (opcional)</label>
+                                    <select id="selTramoVia" class="form-select form-select-sm">
+                                        <option value="">Ambas vías</option>
+                                        <option value="VIA1">Vía 1</option>
+                                        <option value="VIA2">Vía 2</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="text-end mt-2">
+                                <button type="button" class="btn btn-sm btn-ml-cyan text-white fw-bold" onclick="agregarTramoSeleccionado()">➕ Agregar tramo</button>
+                            </div>
+                            <div id="alertaTramo" class="small mt-2"></div>
+                        </div>
+                    </div>
+
+                    <!-- SELECCIÓN ACTUAL -->
+                    <div class="mt-3 pt-3 border-top">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong>Zonas seleccionadas:</strong>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="limpiarSeleccionZonas()">🗑️ Limpiar</button>
+                        </div>
+                        <div id="seleccionZonasChips" class="d-flex flex-wrap gap-2 py-2 px-2 bg-light rounded">
+                            <span class="text-muted fst-italic small">Aún no has seleccionado zonas.</span>
+                        </div>
+                        <!-- Vista previa del resultado que se escribira en el input -->
+                        <div class="mt-2">
+                            <label class="form-label-l2">Resultado (se escribirá en el campo de zona):</label>
+                            <input type="text" class="form-control form-control-sm fw-bold" id="seleccionZonasTexto" readonly>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-ml-cyan text-white fw-bold" onclick="aplicarSeleccionZona()">✅ Aplicar al formulario</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="container-fluid py-3">
 
         <!-- CONTENEDOR DE ALERTAS -->
@@ -227,7 +319,11 @@
                             </div>
                             <div class="mb-2">
                                 <label class="form-label-l2">Ubicación / Zona de Trabajo</label>
-                                <input type="text" class="form-control form-control-sm fw-bold" style="border-color: var(--ml-blue);" name="ubicacion_zona" value="{{ form_previo.get('ubicacion_zona', '') }}" required placeholder="Ej: TK 1 + TK 2" {% if not operador_actual %}disabled{% endif %}>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control form-control-sm fw-bold" id="inputUbicacionAlta" style="border-color: var(--ml-blue);" name="ubicacion_zona" value="{{ form_previo.get('ubicacion_zona', '') }}" required placeholder="Ej: E20->E24 + TK1" {% if not operador_actual %}disabled{% endif %}>
+                                    <button type="button" class="btn btn-sm btn-ml-cyan text-white fw-bold" onclick="abrirSelectorZona('inputUbicacionAlta')" {% if not operador_actual %}disabled{% endif %} title="Elegir zonas en el mapa">🗺️ Elegir</button>
+                                </div>
+                                <div id="alertaZonaAlta" class="small mt-1"></div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col">
@@ -481,7 +577,13 @@
                         <div class="mb-2"><label class="form-label-l2">Empresa</label><input type="text" class="form-control form-control-sm" name="empresa" value="{{ r[3] }}" required></div>
                         <div class="mb-2"><label class="form-label-l2">Orden de Trabajo</label><input type="text" class="form-control form-control-sm" name="orden_trabajo" value="{{ r[4] }}"></div>
                         <div class="mb-2"><label class="form-label-l2">Responsable</label><input type="text" class="form-control form-control-sm" name="responsable" value="{{ r[5] }}" required></div>
-                        <div class="mb-2"><label class="form-label-l2">Zona</label><input type="text" class="form-control form-control-sm" name="ubicacion_zona" value="{{ r[6] }}" required></div>
+                        <div class="mb-2">
+                            <label class="form-label-l2">Zona</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control form-control-sm" id="inputUbicacionEdit{{ r[0] }}" name="ubicacion_zona" value="{{ r[6] }}" required>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirSelectorZona('inputUbicacionEdit{{ r[0] }}')" title="Elegir zonas en el mapa">🗺️</button>
+                            </div>
+                        </div>
 
                         <div class="p-2 border rounded mb-2" style="border-color:var(--ml-red)!important;background:#FAFBFC;">
                             <label class="form-label-l2" style="color:var(--ml-red);">¿Usa Vehículo Auxiliar?</label>
@@ -1050,7 +1152,392 @@
         document.addEventListener('DOMContentLoaded', () => {
             filtrarTablaMonitoreo();
             filtrarTablaImportados();
+            // Validar zonas importadas al cargar (mostrar icono de alerta en filas con zonas no reconocidas)
+            validarZonasImportadas();
         });
+
+        // ====== SELECTOR DE ZONA (modal interactivo) ======
+        let selectorZonaState = {
+            catalogo: null,        // {categorias: {...}, origenes_tramo: [...], destinos_tramo: {...}}
+            seleccion: new Set(),  // claves seleccionadas, ej: {'E20->E24', 'TK1'}
+            inputTargetId: null,   // id del input al que se aplica el resultado
+            modalInstancia: null,
+        };
+
+        function abrirSelectorZona(inputId) {
+            selectorZonaState.inputTargetId = inputId;
+            // Precargar con el valor actual del input
+            const inp = document.getElementById(inputId);
+            selectorZonaState.seleccion = new Set();
+            if (inp && inp.value.trim()) {
+                inp.value.split('+').concat(inp.value.split(',')).forEach(s => {
+                    const n = s.trim().toUpperCase().replace(/\s+/g, ' ');
+                    if (n) selectorZonaState.seleccion.add(n);
+                });
+            }
+            const modalEl = document.getElementById('modalSelectorZona');
+            if (!selectorZonaState.modalInstancia) {
+                selectorZonaState.modalInstancia = new bootstrap.Modal(modalEl);
+            }
+            selectorZonaState.modalInstancia.show();
+            cargarCatalogoZonas();
+        }
+
+        function cargarCatalogoZonas() {
+            if (selectorZonaState.catalogo) {
+                renderSelectorZona();
+                return;
+            }
+            fetch('/api/zonas_catalogo')
+            .then(r => r.json())
+            .then(data => {
+                selectorZonaState.catalogo = data;
+                renderSelectorZona();
+            })
+            .catch(err => {
+                console.error('Error al cargar catálogo de zonas:', err);
+                const cont = document.getElementById('selectorZonaChips');
+                if (cont) cont.innerHTML = '<div class="alert alert-danger small mb-0">No se pudo cargar el catálogo de zonas. Revisa tu conexión.</div>';
+            });
+        }
+
+        function renderSelectorZona() {
+            renderMiniMapa();
+            renderChipsPorCategoria();
+            renderSelectorTramo();
+            renderSeleccionActual();
+        }
+
+        function renderMiniMapa() {
+            const cont = document.getElementById('selectorZonaPlano');
+            if (!cont || !selectorZonaState.catalogo) return;
+            cont.innerHTML = '';
+            const cats = selectorZonaState.catalogo.categorias;
+            let total = 0;
+            Object.entries(cats).forEach(([cat, items]) => {
+                items.forEach(z => {
+                    (z.rects || []).forEach(r => {
+                        total++;
+                        const div = document.createElement('div');
+                        div.dataset.zona = z.clave;
+                        div.className = 'zona-select-area'
+                            + (selectorZonaState.seleccion.has(z.clave) ? ' seleccionada' : '');
+                        div.style.position = 'absolute';
+                        div.style.top = r.top + 'px';
+                        div.style.left = r.left + 'px';
+                        div.style.width = r.width + 'px';
+                        div.style.height = r.height + 'px';
+                        div.title = z.clave;
+                        div.onclick = () => toggleZona(z.clave);
+                        cont.appendChild(div);
+                    });
+                });
+            });
+            // Asegurar cuenta no nula (debug)
+            if (!cont.querySelector('.zona-select-area')) {
+                const warn = document.createElement('div');
+                warn.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:14px;text-align:center;width:50%;';
+                warn.innerHTML = '⚠️ No se encontraron áreas admisibles en el catálogo.<br>Revisa que <code>ZONE_POSITIONS</code> esté cargado en el servidor.';
+                cont.appendChild(warn);
+            }
+            // Aplicar estilos inline (ya que el modal hereda Bootstrap)
+            if (!document.getElementById('selectorZonaStyles')) {
+                const st = document.createElement('style');
+                st.id = 'selectorZonaStyles';
+                st.textContent = `
+                    .zona-select-area {
+                        background-color: rgba(0, 160, 220, 0.18);
+                        border: 1px solid rgba(0, 160, 220, 0.4);
+                        cursor: pointer;
+                        transition: background-color 0.15s, border-color 0.15s;
+                    }
+                    .zona-select-area:hover {
+                        background-color: rgba(0, 160, 220, 0.42);
+                        border-color: rgba(0, 160, 220, 1);
+                    }
+                    .zona-select-area.seleccionada {
+                        background-color: rgba(255, 199, 44, 0.55) !important;
+                        border: 2px solid #FFC72C !important;
+                    }
+                    .zona-chip-cat {
+                        display: inline-block;
+                        padding: 0.32rem 0.6rem;
+                        margin: 0.16rem;
+                        border-radius: 14px;
+                        background: #eef3f9;
+                        border: 1px solid #cbd5e1;
+                        font-size: 0.74rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.12s;
+                    }
+                    .zona-chip-cat:hover { background: #d8e6f4; border-color: #94a8c1; }
+                    .zona-chip-cat.seleccionado {
+                        background: var(--ml-cyan);
+                        color: #fff;
+                        border-color: var(--ml-cyan-dark);
+                    }
+                    .chip-seleccion {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 0.3rem;
+                        padding: 0.28rem 0.55rem;
+                        background: var(--ml-yellow);
+                        color: var(--ml-blue-dark);
+                        border-radius: 14px;
+                        font-weight: 700;
+                        font-size: 0.78rem;
+                    }
+                    .chip-seleccion button {
+                        background: none;
+                        border: none;
+                        color: inherit;
+                        font-weight: 800;
+                        cursor: pointer;
+                        font-size: 0.85rem;
+                        line-height: 1;
+                    }
+                `;
+                document.head.appendChild(st);
+            }
+        }
+
+        function renderChipsPorCategoria() {
+            const cont = document.getElementById('selectorZonaChips');
+            if (!cont || !selectorZonaState.catalogo) return;
+            cont.innerHTML = '';
+            const titulos = {
+                'estacion': '🚉 Estaciones', 'pozo': '💨 Pozos de Ventilación',
+                'tunel': '🚇 Túneles', 'deposito': '🏭 Depósitos / Cajas',
+                'tramo': '↔️ Tramos completos', 'tramo_via': '↔️ Tramos por Vía'
+            };
+            const cats = selectorZonaState.catalogo.categorias;
+            Object.entries(cats).forEach(([cat, items]) => {
+                if (!items.length) return;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'mb-2';
+                wrapper.innerHTML = '<div class="small fw-bold text-muted text-uppercase" style="font-size:0.68rem;letter-spacing:0.5px;">' + (titulos[cat] || cat) + '</div>';
+                const chipsRow = document.createElement('div');
+                items.forEach(z => {
+                    const b = document.createElement('span');
+                    b.className = 'zona-chip-cat' + (selectorZonaState.seleccion.has(z.clave) ? ' seleccionado' : '');
+                    b.textContent = z.clave;
+                    b.title = z.clave;
+                    b.onclick = () => toggleZona(z.clave);
+                    chipsRow.appendChild(b);
+                });
+                wrapper.appendChild(chipsRow);
+                cont.appendChild(wrapper);
+            });
+        }
+
+        function renderSelectorTramo() {
+            if (!selectorZonaState.catalogo) return;
+            const selO = document.getElementById('selTramoOrigen');
+            const selD = document.getElementById('selTramoDestino');
+            if (!selO || !selD) return;
+            // Solo llenar la primera vez
+            if (selO.children.length > 0) return;
+            const origenes = selectorZonaState.catalogo.origenes_tramo || [];
+            origenes.forEach(o => {
+                const opt = document.createElement('option'); opt.value = o; opt.textContent = o; selO.appendChild(opt);
+            });
+            selO.onchange = () => { actualizarTramoDestinos(); };
+            selD.onchange = () => { /* preview en vivo */ };
+            actualizarTramoDestinos();
+        }
+
+        function actualizarTramoDestinos() {
+            const selO = document.getElementById('selTramoOrigen');
+            const selD = document.getElementById('selTramoDestino');
+            if (!selO || !selD || !selectorZonaState.catalogo) return;
+            const orig = selO.value;
+            const destinos = (selectorZonaState.catalogo.destinos_tramo || {})[orig] || [];
+            selD.innerHTML = '';
+            destinos.forEach(d => {
+                const opt = document.createElement('option'); opt.value = d; opt.textContent = d; selD.appendChild(opt);
+            });
+        }
+
+        function agregarTramoSeleccionado() {
+            const selO = document.getElementById('selTramoOrigen');
+            const selD = document.getElementById('selTramoDestino');
+            const selV = document.getElementById('selTramoVia');
+            const alerta = document.getElementById('alertaTramo');
+            if (!selO || !selO.value || !selD || !selD.value) {
+                if (alerta) alerta.innerHTML = '<span class="text-danger small">Selecciona origen y destino.</span>';
+                return;
+            }
+            let clave = selO.value + '->' + selD.value;
+            if (selV && selV.value) clave += ' ' + selV.value;
+            toggleZonaManual(clave, true);
+            if (alerta) alerta.innerHTML = '<span class="text-success small">✓ Tramo <code>' + clave + '</code> agregado a la selección.</span>';
+        }
+
+        function toggleZona(clave) {
+            toggleZonaManual(clave, !selectorZonaState.seleccion.has(clave));
+        }
+
+        function toggleZonaManual(clave, agregar) {
+            if (agregar) selectorZonaState.seleccion.add(clave);
+            else selectorZonaState.seleccion.delete(clave);
+            renderMiniMapa();
+            renderChipsPorCategoria();
+            renderSeleccionActual();
+        }
+
+        function limpiarSeleccionZonas() {
+            selectorZonaState.seleccion.clear();
+            renderMiniMapa();
+            renderChipsPorCategoria();
+            renderSeleccionActual();
+        }
+
+        function renderSeleccionActual() {
+            const cont = document.getElementById('seleccionZonasChips');
+            const out = document.getElementById('seleccionZonasTexto');
+            if (!cont) return;
+            cont.innerHTML = '';
+            if (selectorZonaState.seleccion.size === 0) {
+                cont.innerHTML = '<span class="text-muted fst-italic small">Aún no has seleccionado zonas.</span>';
+                if (out) out.value = '';
+                return;
+            }
+            Array.from(selectorZonaState.seleccion).forEach(z => {
+                const chip = document.createElement('span');
+                chip.className = 'chip-seleccion';
+                chip.innerHTML = z + ' <button type="button" title="Quitar">×</button>';
+                chip.querySelector('button').onclick = () => toggleZonaManual(z, false);
+                cont.appendChild(chip);
+            });
+            if (out) out.value = Array.from(selectorZonaState.seleccion).join(' + ');
+
+            // Validar la seleccion contra el catalogo para advertir de zonas invalidas
+            validarSeleccionZonas();
+        }
+
+        function validarSeleccionZonas() {
+            const out = document.getElementById('seleccionZonasTexto');
+            if (!out) return;
+            if (!out.value.trim()) return;
+            fetch('/api/validar_zonas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ ubicacion_zona: out.value })
+            })
+            .then(r => r.json())
+            .then(data => {
+                const invalidas = (data.partes || []).filter(p => !p.valida);
+                // No reemplazamos el alertaTramo, solo mostramos warn en consola
+                if (invalidas.length > 0) {
+                    console.warn('Zonas no reconocidas:', invalidas);
+                }
+            })
+            .catch(err => console.error('Error al validar selección:', err));
+        }
+
+        function aplicarSeleccionZona() {
+            const out = document.getElementById('seleccionZonasTexto');
+            if (!out || !out.value.trim()) {
+                alert('Selecciona al menos una zona.');
+                return;
+            }
+            const inp = document.getElementById(selectorZonaState.inputTargetId);
+            if (!inp) { alert('No se encuentra el campo destino.'); return; }
+            inp.value = out.value.trim();
+            // Disparar evento input para que las verificaciones realtime (safety + OT) corran
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            selectorZonaState.modalInstancia.hide();
+            // Refrescar alerta de zona del form de alta
+            if (selectorZonaState.inputTargetId === 'inputUbicacionAlta') {
+                verificarZonaValidaAlta();
+            }
+        }
+
+        function verificarZonaValidaAlta() {
+            const inp = document.getElementById('inputUbicacionAlta');
+            const aviso = document.getElementById('alertaZonaAlta');
+            if (!inp || !aviso) return;
+            const val = inp.value.trim();
+            if (!val) { aviso.innerHTML = ''; return; }
+            fetch('/api/validar_zonas', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ ubicacion_zona: val })
+            })
+            .then(r => r.json())
+            .then(data => {
+                const invalidas = (data.partes || []).filter(p => !p.valida);
+                if (invalidas.length === 0) {
+                    aviso.innerHTML = '<span class="text-success">✓ Todas las zonas son reconocidas por el mapa.</span>';
+                } else {
+                    const lista = invalidas.map(p => {
+                        let s = '<code>' + p.texto + '</code>';
+                        if (p.sugerencia) s += ' → <code class="text-primary">' + p.sugerencia + '</code>';
+                        else s += ' <span class="text-muted">(no reconocida)</span>';
+                        return s;
+                    }).join(', ');
+                    aviso.innerHTML = '<span class="text-warning fw-bold">⚠️ Zonas no reconocidas en el mapa:</span> ' + lista + '<br><span class="text-muted small">Usa 🗺️ Elegir para seleccionar zonas válidas.</span>';
+                }
+            })
+            .catch(() => { aviso.innerHTML = ''; });
+        }
+
+        // Validar input de zona del form de alta en tiempo real (debounced)
+        document.addEventListener('DOMContentLoaded', () => {
+            const inpAlta = document.getElementById('inputUbicacionAlta');
+            if (inpAlta) {
+                let zDeb;
+                inpAlta.addEventListener('input', () => {
+                    clearTimeout(zDeb);
+                    zDeb = setTimeout(verificarZonaValidaAlta, 350);
+                });
+            }
+        });
+
+        // ====== VALIDACION DE ZONAS EN FILAS IMPORTADAS ======
+        function validarZonasImportadas() {
+            const filas = document.querySelectorAll('#importPreviewBody tr[id^="importRow"]');
+            if (filas.length === 0) return;
+            filas.forEach(fila => {
+                // la 5a celda (= td index 3 'Desde', 4 'Hasta') no nos basta; usamos el
+                // data-zona si existe o construimos desde Desde -> Hasta
+                const celdas = fila.querySelectorAll('td');
+                if (!celdas[3] || !celdas[4]) return;
+                const desde = celdas[3].textContent.trim();
+                const hasta = celdas[4].textContent.trim();
+                const zona = desde && hasta ? (desde + ' -> ' + hasta) : (desde || hasta);
+                if (!zona) return;
+                fetch('/api/validar_zonas', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ ubicacion_zona: zona })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    const invalidas = (data.partes || []).filter(p => !p.valida);
+                    if (invalidas.length > 0) {
+                        fila.style.backgroundColor = '#fff3cd';
+                        // tooltip con sugerencias
+                        const sugerencias = invalidas.map(p =>
+                            p.texto + (p.sugerencia ? (' → ' + p.sugerencia) : ' (no reconocida)')
+                        ).join(' | ');
+                        fila.title = '⚠️ Zona no reconocida por el mapa: ' + sugerencias + '. Edita para que aparezca en el mapa.';
+                        // Marca la celda Zona (Desde>Hasta) con un badge de alerta
+                        const celda5 = celdas[3]?.parentElement?.querySelector?.('td:nth-child(4)');
+                        // Simplemente apendamos un pequeño warning junto a la celda 5
+                        if (celdas[3]) {
+                            const warn = document.createElement('span');
+                            warn.className = 'badge bg-warning text-dark ms-1';
+                            warn.textContent = '⚠️ Editar zona';
+                            warn.title = sugerencias;
+                            celdas[3].appendChild(warn);
+                        }
+                    }
+                })
+                .catch(err => console.error('Error al validar zona importada:', err));
+            });
+        }
     </script>
 
     <!-- Footer discreto - acceso admin -->
