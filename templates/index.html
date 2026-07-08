@@ -182,10 +182,38 @@
                     <div class="tab-content">
                         <!-- TAB 1: MINI-MAPA CLICABLE -->
                         <div class="tab-pane fade show active" id="tab-mapa" role="tabpanel">
-                            <p class="small text-muted mb-2">Haz <strong>clic</strong> sobre una zona del plano para agregarla. <strong>Clic again</strong> (sobre una zona ya seleccionada) para quitarla. Las áreas admitidas aparecen al pasar el mouse.</p>
-                            <div class="border rounded overflow-auto bg-dark" style="max-height: 60vh;">
+                            <div class="row g-2 mb-2 align-items-center">
+                                <div class="col-md-8">
+                                    <span class="small text-muted me-1">Mostrar:</span>
+                                    <div class="btn-group btn-group-sm" id="filtroMapaGrupo" role="group">
+                                        <button type="button" class="btn btn-outline-secondary active" data-filtro-mapa="todos">Todos</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="estacion">Estaciones</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="pozo">Pozos</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="tunel">Túneles</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="deposito">Depósitos</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="tramo">Tramos</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="tramo_via">Tramos por Vía</button>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <span class="small text-muted">Al <strong>clic</strong> en una zona se muestran las opciones válidas que cubren ese punto (la más específica primero).</span>
+                                </div>
+                            </div>
+                            <div class="border rounded overflow-auto bg-dark position-relative" style="max-height: 60vh;">
                                 <div id="selectorZonaPlano" class="position-relative" style="width:1700px;height:820px;background-image:url('/static/mapa_real.png');background-size:contain;background-repeat:no-repeat;">
                                     <!-- las areas clicables se inyectan via JS -->
+                                </div>
+                                <!-- Popover inline para elegir entre zonas superpuestas que cubren un punto -->
+                                <div id="selectorZonaPopover" class="d-none" style="position:absolute;z-index:50;max-width:300px;">
+                                    <div class="card shadow" style="border-color:var(--ml-cyan);">
+                                        <div class="card-header bg-ml-cyan text-white py-1 px-2 d-flex justify-content-between align-items-center" style="font-size:0.78rem;">
+                                            <strong id="selectorZonaPopoverTitulo">Zonas en este punto</strong>
+                                            <button type="button" class="btn-close btn-close-white btn-sm" onclick="cerrarPopoverZona()"></button>
+                                        </div>
+                                        <div class="card-body p-0">
+                                            <ul id="selectorZonaPopoverLista" class="list-group list-group-flush"></ul>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1162,6 +1190,8 @@
             seleccion: new Set(),  // claves seleccionadas, ej: {'E20->E24', 'TK1'}
             inputTargetId: null,   // id del input al que se aplica el resultado
             modalInstancia: null,
+            filtroMapa: 'todos',   // filtro activo del mini-mapa: 'todos'|'estacion'|'pozo'|'tunel'|'deposito'|'tramo'|'tramo_via'
+            zonaIndex: null,       // indice espacial: [{clave, cat, rects:[...]}, ...] para clic inteligente
         };
 
         function abrirSelectorZona(inputId) {
@@ -1206,15 +1236,78 @@
             renderChipsPorCategoria();
             renderSelectorTramo();
             renderSeleccionActual();
+            // Inicializar el grupo de botones de filtro del mini-mapa
+            inicializarFiltroMapa();
+        }
+
+        function inicializarFiltroMapa() {
+            const btns = document.querySelectorAll('#filtroMapaGrupo button');
+            btns.forEach(b => {
+                b.onclick = () => {
+                    btns.forEach(x => x.classList.remove('active'));
+                    b.classList.add('active');
+                    selectorZonaState.filtroMapa = b.dataset.filtroMapa;
+                    renderMiniMapa();
+                };
+            });
+        }
+
+        function construirZonaIndex() {
+            // indice espacial para clic inteligente: lista plana de todas las
+            // zonas (sin importar el filtro) con sus rects y categoria.
+            const idx = [];
+            const cats = selectorZonaState.catalogo.categorias;
+            Object.entries(cats).forEach(([cat, items]) => {
+                items.forEach(z => {
+                    (z.rects || []).forEach(r => {
+                        idx.push({ clave: z.clave, cat: cat, rect: r });
+                    });
+                });
+            });
+            selectorZonaState.zonaIndex = idx;
+        }
+
+        function zonasEnPunto(x, y) {
+            // Devuelve la lista de zonas del catálogo cuyo rect contiene (x,y).
+            // Orden: la más específica primero (clamp mas pequeño y, entre
+            // empates, clave mas larga).
+            const idx = selectorZonaState.zonaIndex;
+            if (!idx || !idx.length) return [];
+            const hits = idx.filter(item => {
+                const r = item.rect;
+                return x >= r.left && x <= (r.left + r.width) &&
+                       y >= r.top && y <= (r.top + r.height);
+            });
+            hits.sort((a, b) => {
+                const aSpec = (a.clave || '').length;
+                const bSpec = (b.clave || '').length;
+                if (aSpec !== bSpec) return bSpec - aSpec; // más específica primero
+                const aCat = (a.cat === 'tramo_via' ? 0 : a.cat === 'tramo' ? 1 : 2);
+                const bCat = (b.cat === 'tramo_via' ? 0 : b.cat === 'tramo' ? 1 : 2);
+                if (aCat !== bCat) return aCat - bCat; // tramo_via antes que tramo antes que otros
+                return a.rect.width * a.rect.height - b.rect.width * b.rect.height; // mas pequeño primero
+            });
+            // Deduplica por clave (varios rects de una misma zona colisionan)
+            const seen = new Set();
+            const out = [];
+            for (const h of hits) {
+                if (seen.has(h.clave)) continue;
+                seen.add(h.clave);
+                out.push(h);
+            }
+            return out;
         }
 
         function renderMiniMapa() {
             const cont = document.getElementById('selectorZonaPlano');
             if (!cont || !selectorZonaState.catalogo) return;
             cont.innerHTML = '';
+            if (!selectorZonaState.zonaIndex) construirZonaIndex();
             const cats = selectorZonaState.catalogo.categorias;
+            const filtro = selectorZonaState.filtroMapa || 'todos';
             let total = 0;
             Object.entries(cats).forEach(([cat, items]) => {
+                if (filtro !== 'todos' && cat !== filtro) return;
                 items.forEach(z => {
                     (z.rects || []).forEach(r => {
                         total++;
@@ -1227,8 +1320,9 @@
                         div.style.left = r.left + 'px';
                         div.style.width = r.width + 'px';
                         div.style.height = r.height + 'px';
-                        div.title = z.clave;
-                        div.onclick = () => toggleZona(z.clave);
+                        div.title = z.clave + (filtro === 'todos' ? '' : '  [' + cat + ']');
+                        // Clic inteligente con popover
+                        div.onclick = function(ev) { onClicAreaZona(ev, z, r); };
                         cont.appendChild(div);
                     });
                 });
@@ -1237,7 +1331,7 @@
             if (!cont.querySelector('.zona-select-area')) {
                 const warn = document.createElement('div');
                 warn.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#fff;font-size:14px;text-align:center;width:50%;';
-                warn.innerHTML = '⚠️ No se encontraron áreas admisibles en el catálogo.<br>Revisa que <code>ZONE_POSITIONS</code> esté cargado en el servidor.';
+                warn.innerHTML = '⚠️ No se encontraron áreas admisibles para el filtro "' + filtro + '".<br>Revisa que <code>ZONE_POSITIONS</code> esté cargado en el servidor o cambia el filtro.';
                 cont.appendChild(warn);
             }
             // Aplicar estilos inline (ya que el modal hereda Bootstrap)
@@ -1246,13 +1340,13 @@
                 st.id = 'selectorZonaStyles';
                 st.textContent = `
                     .zona-select-area {
-                        background-color: rgba(0, 160, 220, 0.18);
-                        border: 1px solid rgba(0, 160, 220, 0.4);
+                        background-color: rgba(0, 160, 220, 0.12);
+                        border: 1px solid rgba(0, 160, 220, 0.35);
                         cursor: pointer;
                         transition: background-color 0.15s, border-color 0.15s;
                     }
                     .zona-select-area:hover {
-                        background-color: rgba(0, 160, 220, 0.42);
+                        background-color: rgba(0, 160, 220, 0.34);
                         border-color: rgba(0, 160, 220, 1);
                     }
                     .zona-select-area.seleccionada {
@@ -1297,10 +1391,98 @@
                         font-size: 0.85rem;
                         line-height: 1;
                     }
+                    .popover-zona-item {
+                        cursor: pointer;
+                        font-size: 0.82rem;
+                        padding: 0.35rem 0.6rem;
+                    }
+                    .popover-zona-item:hover { background: #e8f3fb; }
+                    .popover-zona-item.seleccionado { background: #FFF3CD; }
+                    .popover-zona-item small { color: #94a3b8; }
                 `;
                 document.head.appendChild(st);
             }
         }
+
+        function onClicAreaZona(ev, zonaClic, rectClic) {
+            // Calcular coordenadas (x,y) relativas al contenedor del plano.
+            const cont = document.getElementById('selectorZonaPlano');
+            const contRect = cont.getBoundingClientRect();
+            const escalaX = 1700 / contRect.width;
+            const escalaY = 820 / contRect.height;
+            const x = (ev.clientX - contRect.left) * escalaX;
+            const y = (ev.clientY - contRect.top) * escalaY;
+
+            const candidatas = zonasEnPunto(x, y);
+            if (candidatas.length === 0) {
+                toggleZonaManual(zonaClic.clave, !selectorZonaState.seleccion.has(zonaClic.clave));
+                return;
+            }
+            if (candidatas.length === 1) {
+                toggleZonaManual(candidatas[0].clave, !selectorZonaState.seleccion.has(candidatas[0].clave));
+                cerrarPopoverZona();
+                return;
+            }
+            // Varias zonas cubren este punto -> abrir popover con la lista.
+            abrirPopoverZona(candidatas, ev.clientX, ev.clientY);
+        }
+
+        function abrirPopoverZona(candidatas, clientX, clientY) {
+            const pop = document.getElementById('selectorZonaPopover');
+            const lista = document.getElementById('selectorZonaPopoverLista');
+            const titulo = document.getElementById('selectorZonaPopoverTitulo');
+            if (!pop || !lista) return;
+            const cont = document.getElementById('selectorZonaPlano').parentElement;
+            const contRect = cont.getBoundingClientRect();
+            lista.innerHTML = '';
+            titulo.textContent = candidatas.length + ' zona(s) en este punto';
+            candidatas.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item popover-zona-item'
+                    + (selectorZonaState.seleccion.has(item.clave) ? ' seleccionado' : '');
+                const catLabel = ({
+                    estacion: 'Estación', pozo: 'Pozo', tunel: 'Túnel', deposito: 'Depósito',
+                    tramo: 'Tramo completo', tramo_via: 'Tramo por vía', via: 'Vía'
+                })[item.cat] || item.cat;
+                li.innerHTML = '<div class="d-flex justify-content-between align-items-center">'
+                    + '<span><strong>' + item.clave + '</strong>'
+                    + (selectorZonaState.seleccion.has(item.clave) ? ' <span class="badge bg-warning text-dark">✓ sel.</span>' : '')
+                    + '</span><small>' + catLabel + '</small></div>';
+                li.onclick = () => {
+                    toggleZonaManual(item.clave, !selectorZonaState.seleccion.has(item.clave));
+                    cerrarPopoverZona();
+                };
+                lista.appendChild(li);
+            });
+            // Posicionar el popover dentro del contenedor scrollable
+            // Convertir coords client -> coords relativas al contenedor
+            const leftRel = clientX - contRect.left + 10;  // 10px de offset
+            const topRel = clientY - contRect.top + 10;
+            // Clamp para mantener dentro del contenedor
+            const ancho = 280;
+            const alto = Math.min(300, candidatas.length * 44 + 60);
+            const left = Math.max(8, Math.min(leftRel, contRect.width - ancho - 8));
+            const top = Math.max(8, Math.min(topRel, contRect.height - alto - 8));
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+            pop.style.width = ancho + 'px';
+            pop.classList.remove('d-none');
+        }
+
+        function cerrarPopoverZona() {
+            const pop = document.getElementById('selectorZonaPopover');
+            if (pop) pop.classList.add('d-none');
+        }
+
+        // Cerrar popover si se hace clic fuera
+        document.addEventListener('click', function(ev) {
+            const pop = document.getElementById('selectorZonaPopover');
+            if (!pop || pop.classList.contains('d-none')) return;
+            if (pop.contains(ev.target)) return;
+            // Si el clic fue sobre un area de zona, no cerrar (lo maneja onClicAreaZona)
+            if (ev.target.classList && ev.target.classList.contains('zona-select-area')) return;
+            cerrarPopoverZona();
+        });
 
         function renderChipsPorCategoria() {
             const cont = document.getElementById('selectorZonaChips');
