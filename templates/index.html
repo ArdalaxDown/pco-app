@@ -189,8 +189,8 @@
                                         <button type="button" class="btn btn-outline-secondary active" data-filtro-mapa="todos">Todos</button>
                                         <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="estacion">Estaciones</button>
                                         <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="pozo">Pozos</button>
-                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="tunel">Túneles</button>
-                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="deposito">Depósitos</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="ptsa">PTSA</button>
+                                        <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="deposito">ZM</button>
                                         <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="tramo">Tramos</button>
                                         <button type="button" class="btn btn-outline-secondary" data-filtro-mapa="tramo_via">Tramos por Vía</button>
                                     </div>
@@ -1712,8 +1712,8 @@
                 li.className = 'list-group-item popover-zona-item'
                     + (selectorZonaState.seleccion.has(item.clave) ? ' seleccionado' : '');
                 const catLabel = ({
-                    estacion: 'Estación', pozo: 'Pozo', tunel: 'Túnel', deposito: 'Depósito',
-                    tramo: 'Tramo completo', tramo_via: 'Tramo por vía', via: 'Vía'
+                    estacion: 'Estación', pozo: 'Pozo', ptsa: 'PTSA', deposito: 'ZM',
+                    tramo: 'Tramo completo', tramo_via: 'Tramo por vía'
                 })[item.cat] || item.cat;
                 li.innerHTML = '<div class="d-flex justify-content-between align-items-center">'
                     + '<span><strong>' + item.clave + '</strong>'
@@ -1761,8 +1761,10 @@
             cont.innerHTML = '';
             const titulos = {
                 'estacion': '🚉 Estaciones', 'pozo': '💨 Pozos de Ventilación',
-                'tunel': '🚇 Túneles', 'deposito': '🏭 Depósitos / Cajas',
-                'tramo': '↔️ Tramos completos', 'tramo_via': '↔️ Tramos por Vía'
+                'ptsa': '🚇 PTSA (Túneles / Vía Principal / D1 / D2)',
+                'deposito': '🏭 ZM (Zona de Mantenimiento)',
+                'tramo': '↔️ Tramos completos (ambas vías)',
+                'tramo_via': '↔️ Tramos por Vía (VIA1 / VIA2)'
             };
             const cats = selectorZonaState.catalogo.categorias;
             Object.entries(cats).forEach(([cat, items]) => {

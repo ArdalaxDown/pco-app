@@ -431,24 +431,33 @@ def coordenadas():
 def _clasificar_zona(clave):
     """Clasifica una clave de ZONE_POSITIONS en una categoria para el
     selector interactivo de zonas.
-    Devuelve uno de: 'estacion', 'pozo', 'tunel', 'via', 'deposito',
-    'tramo', 'tramo_via', 'otro'."""
+    Devuelve uno de: 'estacion', 'pozo', 'ptsa', 'deposito', 'tramo',
+    'tramo_via', 'otro'.
+
+    Notacion:
+      - deposito: solo ZM (Zona de Mantenimiento, area tipica peatonal).
+      - ptsa: zonas del PTSA y via principal (Tuneles TK1-TK7, D1, D2, etc.).
+        Estas son areas fisicas dentro del PTSA / via principal, no depósitos
+        independientes.
+      - estacion: solo estaciones E20-E24 sueltas (tramos y por vía van a categorías separadas).
+    """
     z = (clave or '').upper().strip()
     if '->' in z and 'VIA' in z:
         return 'tramo_via'
     if '->' in z:
         return 'tramo'
-    if z in ('D1', 'D2', 'ZM'):
+    if z == 'ZM':
         return 'deposito'
-    if z in ('TK1', 'TK2', 'TK3', 'TK4', 'TK5', 'TK7',
-            'TK_TEST', 'TKTEST', 'TESTTRACK', 'PTSA'):
-        return 'tunel'
+    # PTSA: zonas del taller y via principal (TK1-TK7, D1, D2, PTSA y variantes)
+    if z in ('D1', 'D2', 'PTSA', 'TK1', 'TK2', 'TK3', 'TK4', 'TK5', 'TK7',
+            'TK_TEST', 'TKTEST', 'TESTTRACK'):
+        return 'ptsa'
     if z.startswith('PV'):
         return 'pozo'
     if z.startswith('E2') and len(z) <= 3:
         return 'estacion'
     if 'VIA' in z:
-        return 'via'
+        return 'tramo_via'
     return 'otro'
 
 
@@ -464,7 +473,7 @@ def api_zonas_catalogo():
           'categorias': {
             'estacion': [ {'clave': 'E20', 'rects': [{top,left,width,height,label}, ...]}, ... ],
             'pozo': [...],
-            'tunel': [...],
+            'ptsa': [...],
             'deposito': [...],
             'tramo': [...],
             'tramo_via': [...]
@@ -474,7 +483,14 @@ def api_zonas_catalogo():
           'plano_size': {'width': 1700, 'height': 820}
         }
     """
-    CATEGORIAS_VISIBLES = ['estacion', 'pozo', 'tunel', 'deposito',
+    # Categorias devueltas al frontend. Notacion:
+    #   - estacion: solo E20-E24 sueltas (sin variantes via).
+    #   - pozo: solo PV19-PV24.
+    #   - ptsa: PTSA, TK1-TK7, D1, D2 (zonas del taller / via principal).
+    #   - deposito: solo ZM.
+    #   - tramo: tramos completos E20-E24 + PV19-PV24.
+    #   - tramo_via: tramos especificando VIA1/VIA2.
+    CATEGORIAS_VISIBLES = ['estacion', 'pozo', 'ptsa', 'deposito',
                           'tramo', 'tramo_via']
     agrupado = {cat: [] for cat in CATEGORIAS_VISIBLES}
 
