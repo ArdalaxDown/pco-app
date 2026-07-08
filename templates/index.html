@@ -1192,6 +1192,8 @@
             modalInstancia: null,
             filtroMapa: 'todos',   // filtro activo del mini-mapa: 'todos'|'estacion'|'pozo'|'tunel'|'deposito'|'tramo'|'tramo_via'
             zonaIndex: null,       // indice espacial: [{clave, cat, rects:[...]}, ...] para clic inteligente
+            modoTramo: null,       // 'tramo'|'tramo_via'|null - modo de seleccion de tramo por clic Origen/Destino
+            tramoOrigenSel: null,  // nodo origen ya clicado en modoTramo
         };
 
         function abrirSelectorZona(inputId) {
@@ -1305,6 +1307,20 @@
             if (!selectorZonaState.zonaIndex) construirZonaIndex();
             const cats = selectorZonaState.catalogo.categorias;
             const filtro = selectorZonaState.filtroMapa || 'todos';
+
+            // Si el filtro es tramo o tramo_via -> modo Origen/Destino por clic
+            // en lugar de dibujar las 47/38 áreas superpuestas.
+            if (filtro === 'tramo' || filtro === 'tramo_via') {
+                selectorZonaState.modoTramo = filtro;
+                selectorZonaState.tramoOrigenSel = null;
+                cerrarPopoverZona();
+                renderMiniMapaNodos(cont, cats, filtro);
+                return;
+            } else {
+                selectorZonaState.modoTramo = null;
+                selectorZonaState.tramoOrigenSel = null;
+            }
+
             let total = 0;
             Object.entries(cats).forEach(([cat, items]) => {
                 if (filtro !== 'todos' && cat !== filtro) return;
@@ -1334,74 +1350,329 @@
                 warn.innerHTML = '⚠️ No se encontraron áreas admisibles para el filtro "' + filtro + '".<br>Revisa que <code>ZONE_POSITIONS</code> esté cargado en el servidor o cambia el filtro.';
                 cont.appendChild(warn);
             }
-            // Aplicar estilos inline (ya que el modal hereda Bootstrap)
-            if (!document.getElementById('selectorZonaStyles')) {
-                const st = document.createElement('style');
-                st.id = 'selectorZonaStyles';
-                st.textContent = `
-                    .zona-select-area {
-                        background-color: rgba(0, 160, 220, 0.12);
-                        border: 1px solid rgba(0, 160, 220, 0.35);
-                        cursor: pointer;
-                        transition: background-color 0.15s, border-color 0.15s;
-                    }
-                    .zona-select-area:hover {
-                        background-color: rgba(0, 160, 220, 0.34);
-                        border-color: rgba(0, 160, 220, 1);
-                    }
-                    .zona-select-area.seleccionada {
-                        background-color: rgba(255, 199, 44, 0.55) !important;
-                        border: 2px solid #FFC72C !important;
-                    }
-                    .zona-chip-cat {
-                        display: inline-block;
-                        padding: 0.32rem 0.6rem;
-                        margin: 0.16rem;
-                        border-radius: 14px;
-                        background: #eef3f9;
-                        border: 1px solid #cbd5e1;
-                        font-size: 0.74rem;
-                        font-weight: 600;
-                        cursor: pointer;
-                        transition: all 0.12s;
-                    }
-                    .zona-chip-cat:hover { background: #d8e6f4; border-color: #94a8c1; }
-                    .zona-chip-cat.seleccionado {
-                        background: var(--ml-cyan);
-                        color: #fff;
-                        border-color: var(--ml-cyan-dark);
-                    }
-                    .chip-seleccion {
-                        display: inline-flex;
-                        align-items: center;
-                        gap: 0.3rem;
-                        padding: 0.28rem 0.55rem;
-                        background: var(--ml-yellow);
-                        color: var(--ml-blue-dark);
-                        border-radius: 14px;
-                        font-weight: 700;
-                        font-size: 0.78rem;
-                    }
-                    .chip-seleccion button {
-                        background: none;
-                        border: none;
-                        color: inherit;
-                        font-weight: 800;
-                        cursor: pointer;
-                        font-size: 0.85rem;
-                        line-height: 1;
-                    }
-                    .popover-zona-item {
-                        cursor: pointer;
-                        font-size: 0.82rem;
-                        padding: 0.35rem 0.6rem;
-                    }
-                    .popover-zona-item:hover { background: #e8f3fb; }
-                    .popover-zona-item.seleccionado { background: #FFF3CD; }
-                    .popover-zona-item small { color: #94a3b8; }
-                `;
-                document.head.appendChild(st);
+            aplicarEstilosSelectorZona();
+        }
+
+        // ====== MODO NODOS PARA TRAMO ======
+        // Cuando el filtro es 'tramo' o 'tramo_via', en lugar de dibujar las
+        // áreas superpuestas, mostramos solo los 11 nodos (5 estaciones E20-E24
+        // + 6 pozos PV19-PV24) como círculos grandes clicables. El usuario hace
+        // clic en Origen y luego en Destino; el sistema genera automáticamente
+        // la clave válida consultando el catálogo (p.ej. E20->E24, o
+        // E20->E24 VIA1 si el filtro es tramo_via).
+        function renderMiniMapaNodos(cont, cats, filtro) {
+            // Recopilar nodos (estaciones + pozos) con su primer rect
+            const nodos = [];
+            ['estacion', 'pozo'].forEach(cat => {
+                (cats[cat] || []).forEach(z => {
+                    if (!z.rects || !z.rects.length) return;
+                    const r = z.rects[0];
+                    nodos.push({
+                        clave: z.clave, cat: cat,
+                        cx: r.left + r.width / 2,
+                        cy: r.top + r.height / 2,
+                    });
+                });
+            });
+
+            // Banner de instrucciones
+            const banner = document.createElement('div');
+            banner.style.cssText = 'position:absolute;top:6px;left:50%;transform:translateX(-50%);background:rgba(0,160,220,0.92);color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;font-weight:700;z-index:10;box-shadow:0 2px 8px rgba(0,0,0,0.3);';
+            banner.id = 'tramoModoBanner';
+            banner.innerHTML = 'Modo selección de tramo: haz clic en <strong>ORIGEN</strong>, luego en <strong>DESTINO</strong>.';
+            if (filtro === 'tramo_via') {
+                banner.innerHTML += '<br><small style="opacity:0.85;">Filtro: Tramo por Vía — al elegir Destino, escogerás Vía 1/2 con un popover.</small>';
             }
+            cont.appendChild(banner);
+
+            // Dibujar los nodos
+            nodos.forEach(n => {
+                const div = document.createElement('div');
+                div.className = 'nodo-mapa-tramo';
+                div.dataset.nodo = n.clave;
+                div.style.left = (n.cx - 22) + 'px';
+                div.style.top = (n.cy - 22) + 'px';
+                div.textContent = n.clave;
+                div.title = 'Clic para usar ' + n.clave + ' como '
+                    + (selectorZonaState.tramoOrigenSel ? 'DESTINO' : 'ORIGEN');
+                if (selectorZonaState.tramoOrigenSel === n.clave) {
+                    div.classList.add('origen-seleccion');
+                }
+                div.onclick = function(ev) { onClicNodoTramo(ev, n, filtro); };
+                cont.appendChild(div);
+            });
+
+            // Si ya hay un origen seleccionado, resaltar destinos validos vs no validos
+            if (selectorZonaState.tramoOrigenSel) {
+                const o = selectorZonaState.tramoOrigenSel;
+                const destinosValidos = (selectorZonaState.catalogo.destinos_tramo || {})[o] || [];
+                nodos.forEach(n => {
+                    if (n.clave === o) return;
+                    const divNodo = cont.querySelector('.nodo-mapa-tramo[data-nodo="' + n.clave + '"]');
+                    if (!divNodo) return;
+                    if (!destinosValidos.includes(n.clave)) {
+                        divNodo.classList.add('destino-no-valido');
+                    } else {
+                        divNodo.classList.add('destino-valido');
+                    }
+                });
+            }
+
+            aplicarEstilosSelectorZona();
+        }
+
+        function onClicNodoTramo(ev, nodo, filtro) {
+            ev.stopPropagation();
+            const esOrigen = !selectorZonaState.tramoOrigenSel;
+            if (esOrigen) {
+                // 1) Clic en ORIGEN - lo marcamos y esperamos destino
+                selectorZonaState.tramoOrigenSel = nodo.clave;
+                renderMiniMapaNodos(
+                    document.getElementById('selectorZonaPlano'),
+                    selectorZonaState.catalogo.categorias,
+                    filtro
+                );
+                return;
+            }
+            // 2) Clic en DESTINO - generar la clave válida consultando catalogo
+            const org = selectorZonaState.tramoOrigenSel;
+            const dest = nodo.clave;
+            if (org === dest) {
+                // clic en el mismo -> resetear
+                selectorZonaState.tramoOrigenSel = null;
+                renderMiniMapaNodos(
+                    document.getElementById('selectorZonaPlano'),
+                    selectorZonaState.catalogo.categorias,
+                    filtro
+                );
+                return;
+            }
+            const destinosValidos = (selectorZonaState.catalogo.destinos_tramo || {})[org] || [];
+            if (!destinosValidos.includes(dest)) {
+                // destino invalido -> avisar y resetear
+                const banner = document.getElementById('tramoModoBanner');
+                if (banner) {
+                    banner.innerHTML = '⚠️ No existe tramo válido <code>' + org + '->' + dest + '</code>. '
+                        + 'Probaste con un tramo no permitido. Vuelve a empezar.';
+                    banner.style.background = 'rgba(227, 6, 19, 0.92)';
+                }
+                selectorZonaState.tramoOrigenSel = null;
+                setTimeout(() => renderMiniMapaNodos(
+                    document.getElementById('selectorZonaPlano'),
+                    selectorZonaState.catalogo.categorias,
+                    filtro
+                ), 1400);
+                return;
+            }
+            // Generar clave(s) valida(s)
+            const tramoBase = org + '->' + dest;
+            if (filtro === 'tramo') {
+                // sin via - directo
+                toggleZonaManual(tramoBase, !selectorZonaState.seleccion.has(tramoBase));
+                selectorZonaState.tramoOrigenSel = null;
+                const banner = document.getElementById('tramoModoBanner');
+                if (banner) {
+                    banner.innerHTML = '✓ Tramo <strong>' + tramoBase + '</strong> agregado. '
+                        + 'Haz clic en otro ORIGEN para seguir.';
+                    banner.style.background = 'rgba(40, 167, 69, 0.92)';
+                    setTimeout(() => {
+                        banner.style.background = 'rgba(0,160,220,0.92)';
+                        banner.innerHTML = 'Modo selección de tramo: haz clic en <strong>ORIGEN</strong>, luego en <strong>DESTINO</strong>.';
+                    }, 1400);
+                }
+                renderMiniMapaNodos(
+                    document.getElementById('selectorZonaPlano'),
+                    selectorZonaState.catalogo.categorias,
+                    filtro
+                );
+            } else {
+                // tramo_via - abrir popover para elegir VIA1 o VIA2 (o ambas)
+                abrirPopoverTramoVia(org, dest, ev.clientX, ev.clientY);
+            }
+        }
+
+        function abrirPopoverTramoVia(org, dest, clientX, clientY) {
+            const pop = document.getElementById('selectorZonaPopover');
+            const lista = document.getElementById('selectorZonaPopoverLista');
+            const titulo = document.getElementById('selectorZonaPopoverTitulo');
+            if (!pop || !lista) return;
+            const cont = document.getElementById('selectorZonaPlano').parentElement;
+            const contRect = cont.getBoundingClientRect();
+            lista.innerHTML = '';
+            titulo.textContent = 'Elegir vía para ' + org + '->' + dest;
+
+            // Opciones: VIA1, VIA2, o ambas vías (tramo base)
+            const opciones = [
+                { clave: org + '->' + dest + ' VIA1', label: 'Vía 1' },
+                { clave: org + '->' + dest + ' VIA2', label: 'Vía 2' },
+                { clave: org + '->' + dest, label: 'Ambas vías (tramo completo)' },
+            ];
+            // Filtrarlas a las que existan en el catalogo (zonaIndex)
+            const idxClaves = new Set(selectorZonaState.zonaIndex.map(i => i.clave));
+            const validas = opciones.filter(o => idxClaves.has(o.clave));
+
+            if (validas.length === 0) {
+                lista.innerHTML = '<li class="list-group-item small text-danger">No existen tramos válidos para ' + org + '->' + dest + '.</li>';
+            } else {
+                validas.forEach(o => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item popover-zona-item'
+                        + (selectorZonaState.seleccion.has(o.clave) ? ' seleccionado' : '');
+                    const selBad = selectorZonaState.seleccion.has(o.clave) ? ' <span class="badge bg-warning text-dark">✓ sel.</span>' : '';
+                    li.innerHTML = '<div class="d-flex justify-content-between align-items-center"><span><strong>' + o.label + '</strong>' + selBad + '</span><small class="text-muted">' + o.clave + '</small></div>';
+                    li.onclick = () => {
+                        toggleZonaManual(o.clave, !selectorZonaState.seleccion.has(o.clave));
+                        selectorZonaState.tramoOrigenSel = null;
+                        cerrarPopoverZona();
+                        const banner = document.getElementById('tramoModoBanner');
+                        if (banner) {
+                            banner.innerHTML = '✓ Tramo <strong>' + o.clave + '</strong> agregado. '
+                                + 'Haz clic en otro ORIGEN para seguir.';
+                            banner.style.background = 'rgba(40, 167, 69, 0.92)';
+                            setTimeout(() => {
+                                banner.style.background = 'rgba(0,160,220,0.92)';
+                                banner.innerHTML = 'Modo selección de tramo: haz clic en <strong>ORIGEN</strong>, luego en <strong>DESTINO</strong>.<br><small style="opacity:0.85;">Filtro: Tramo por Vía — al elegir Destino, escogerás Vía 1/2 con un popover.</small>';
+                            }, 1400);
+                        }
+                        renderMiniMapaNodos(
+                            document.getElementById('selectorZonaPlano'),
+                            selectorZonaState.catalogo.categorias,
+                            'tramo_via'
+                        );
+                    };
+                    lista.appendChild(li);
+                });
+            }
+
+            // Posicionar
+            const leftRel = clientX - contRect.left + 10;
+            const topRel = clientY - contRect.top + 10;
+            const ancho = 300;
+            const alto = Math.min(280, validas.length * 48 + 60);
+            const left = Math.max(8, Math.min(leftRel, contRect.width - ancho - 8));
+            const top = Math.max(8, Math.min(topRel, contRect.height - alto - 8));
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+            pop.style.width = ancho + 'px';
+            pop.classList.remove('d-none');
+        }
+
+        // Refactor: aplicar estilos del selector de zona (incluye nodos de tramo)
+        function aplicarEstilosSelectorZona() {
+            if (document.getElementById('selectorZonaStyles')) return;
+            const st = document.createElement('style');
+            st.id = 'selectorZonaStyles';
+            st.textContent = `
+                .zona-select-area {
+                    background-color: rgba(0, 160, 220, 0.12);
+                    border: 1px solid rgba(0, 160, 220, 0.35);
+                    cursor: pointer;
+                    transition: background-color 0.15s, border-color 0.15s;
+                }
+                .zona-select-area:hover {
+                    background-color: rgba(0, 160, 220, 0.34);
+                    border-color: rgba(0, 160, 220, 1);
+                }
+                .zona-select-area.seleccionada {
+                    background-color: rgba(255, 199, 44, 0.55) !important;
+                    border: 2px solid #FFC72C !important;
+                }
+                .nodo-mapa-tramo {
+                    position: absolute;
+                    width: 44px;
+                    height: 44px;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: rgba(0, 160, 220, 0.85);
+                    color: #fff;
+                    font-size: 0.74rem;
+                    font-weight: 800;
+                    cursor: pointer;
+                    border: 3px solid #fff;
+                    box-shadow: 0 0 10px rgba(0, 160, 220, 0.7), 0 2px 6px rgba(0,0,0,0.4);
+                    transition: transform 0.12s, background-color 0.12s, box-shadow 0.12s, opacity 0.12s;
+                    user-select: none;
+                    text-align: center;
+                    line-height: 1;
+                }
+                .nodo-mapa-tramo:hover {
+                    transform: scale(1.18);
+                    background: rgba(0, 160, 220, 1);
+                    box-shadow: 0 0 18px rgba(0, 160, 220, 1), 0 4px 10px rgba(0,0,0,0.5);
+                }
+                .nodo-mapa-tramo.origen-seleccion {
+                    background: #FFC72C !important;
+                    color: #142A50;
+                    border-color: #fff;
+                    box-shadow: 0 0 22px #FFC72C, 0 4px 12px rgba(0,0,0,0.5);
+                    transform: scale(1.1);
+                }
+                .nodo-mapa-tramo.destino-valido {
+                    background: rgba(40, 167, 69, 0.85) !important;
+                    border-color: rgba(40, 167, 69, 1) !important;
+                }
+                .nodo-mapa-tramo.destino-valido:hover {
+                    background: rgba(40, 167, 69, 1) !important;
+                }
+                .nodo-mapa-tramo.destino-no-valido {
+                    background: rgba(150, 150, 150, 0.45) !important;
+                    border-color: rgba(150, 150, 150, 0.55) !important;
+                    color: rgba(255, 255, 255, 0.55);
+                    cursor: not-allowed;
+                }
+                .nodo-mapa-tramo.destino-no-valido:hover {
+                    transform: none;
+                }
+                .zona-chip-cat {
+                    display: inline-block;
+                    padding: 0.32rem 0.6rem;
+                    margin: 0.16rem;
+                    border-radius: 14px;
+                    background: #eef3f9;
+                    border: 1px solid #cbd5e1;
+                    font-size: 0.74rem;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.12s;
+                }
+                .zona-chip-cat:hover { background: #d8e6f4; border-color: #94a8c1; }
+                .zona-chip-cat.seleccionado {
+                    background: var(--ml-cyan);
+                    color: #fff;
+                    border-color: var(--ml-cyan-dark);
+                }
+                .chip-seleccion {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.3rem;
+                    padding: 0.28rem 0.55rem;
+                    background: var(--ml-yellow);
+                    color: var(--ml-blue-dark);
+                    border-radius: 14px;
+                    font-weight: 700;
+                    font-size: 0.78rem;
+                }
+                .chip-seleccion button {
+                    background: none;
+                    border: none;
+                    color: inherit;
+                    font-weight: 800;
+                    cursor: pointer;
+                    font-size: 0.85rem;
+                    line-height: 1;
+                }
+                .popover-zona-item {
+                    cursor: pointer;
+                    font-size: 0.82rem;
+                    padding: 0.35rem 0.6rem;
+                }
+                .popover-zona-item:hover { background: #e8f3fb; }
+                .popover-zona-item.seleccionado { background: #FFF3CD; }
+                .popover-zona-item small { color: #94a3b8; }
+            `;
+            document.head.appendChild(st);
         }
 
         function onClicAreaZona(ev, zonaClic, rectClic) {
