@@ -158,7 +158,12 @@
     </div>
 
     <!-- ====== MODAL SELECTOR DE ZONA (mini-mapa interactivo + chips) ====== -->
-    <div class="modal fade" id="modalSelectorZona" tabindex="-1" aria-labelledby="modalSelectorZonaLabel" aria-hidden="true">
+    <!-- Selector de Zona: el z-index=1060 lo situa SIEMPRE por encima de cualquier
+         otro modal de Bootstrap 5 (los editModal de Corregir, etc.), para que al
+         abrirlo desde un modal de edicion no quede detras ni al cambiar de foco. -->
+    <div class="modal fade" id="modalSelectorZona" tabindex="-1"
+         aria-labelledby="modalSelectorZonaLabel" aria-hidden="true"
+         style="z-index:1060;" data-bs-backdrop="static" data-bs-focus="true">
         <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content" style="border:2px solid var(--ml-cyan);">
                 <div class="modal-header bg-ml-cyan text-white">
@@ -1207,11 +1212,31 @@
                     if (n) selectorZonaState.seleccion.add(n);
                 });
             }
+            // Si el input esta dentro de un modal Corregir abierto (editModal),
+            // nos aseguramos de que el z-index del Selector sea mayor (1060)
+            // y que el modal de Corregir tenga z-index menor (1045) para que
+            // el Selector se vea SIEMPRE por encima.
+            // Esto evita que al hacer clic en el mini-mapa el foco 'coma'
+            // al modal de Corregir y lo cierre definitivo.
+            let editModalAbierto = null;
+            document.querySelectorAll('.modal[id^="editModal"].show, .modal[id^="editModal"][style*="display: block"]').forEach(m => {
+                if (inp.closest('#' + m.id)) {
+                    editModalAbierto = m;
+                    m.style.zIndex = '1045';
+                }
+            });
             const modalEl = document.getElementById('modalSelectorZona');
             if (!selectorZonaState.modalInstancia) {
-                selectorZonaState.modalInstancia = new bootstrap.Modal(modalEl);
+                selectorZonaState.modalInstancia = new bootstrap.Modal(modalEl, {
+                    backdrop: 'static',
+                    focus: true,
+                });
             }
             selectorZonaState.modalInstancia.show();
+            // Inyectar z-index explícito del selector para que quede encima
+            // del editModal sin pisar los otros modales de Bootstrap.
+            const dialog = modalEl.querySelector('.modal-dialog');
+            if (dialog) dialog.parentElement.style.zIndex = '1070';
             cargarCatalogoZonas();
         }
 
@@ -1903,6 +1928,10 @@
             // Disparar evento input para que las verificaciones realtime (safety + OT) corran
             inp.dispatchEvent(new Event('input', { bubbles: true }));
             selectorZonaState.modalInstancia.hide();
+            // Restaurar z-index de los modals Corregir que estaban abiertos
+            document.querySelectorAll('.modal[id^="editModal"][style*="z-index"]').forEach(m => {
+                m.style.zIndex = '';
+            });
             // Refrescar alerta de zona del form de alta
             if (selectorZonaState.inputTargetId === 'inputUbicacionAlta') {
                 verificarZonaValidaAlta();
