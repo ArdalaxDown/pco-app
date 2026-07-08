@@ -577,12 +577,30 @@
             const formData = new FormData();
             formData.append('excel_file', file);
 
+            // Feedback visual mientras se procesa la subida
+            let aviso = document.createElement('div');
+            aviso.className = 'alert alert-info';
+            aviso.innerHTML = '⏳ Importando Excel... por favor espera.';
+            document.body.appendChild(aviso);
+
             fetch('/importar_excel', {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
-            .then(data => {
+            .then(response => {
+                // Intentamos leer SIEMPRE el JSON, incluso cuando la respuesta
+                // viene con status de error (4xx/5xx). Si el servidor devuelve
+                // HTML (por ejemplo un traceback), response.json() lanza y lo
+                // capturamos en el .catch() para mostrar una alerta clara en
+                // vez de quedarnos en silencio ("se bugea y no sale nada").
+                return response.json().then(data => {
+                    return { ok: response.ok, data: data };
+                }).catch(() => {
+                    // No es JSON (probablemente HTML de error 500)
+                    throw new Error('El servidor respondió con un error no procesable (HTML en vez de JSON). Revisa los logs del servidor.');
+                });
+            })
+            .then(({ ok, data }) => {
                 if (data.error) {
                     alert('Error: ' + data.error);
                     return;
@@ -594,7 +612,12 @@
                 location.reload();
             })
             .catch(err => {
-                alert('Error al procesar: ' + err.message);
+                alert('Error al procesar el Excel: ' + err.message);
+            })
+            .finally(() => {
+                if (aviso && aviso.parentNode) {
+                    aviso.parentNode.removeChild(aviso);
+                }
             });
         }
 

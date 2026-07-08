@@ -1,6 +1,6 @@
 from flask import Flask, flash, render_template, request, redirect, url_for, send_file, session, jsonify
 import psycopg2
-from psycopg2 import OperationalError, DatabaseError
+from psycopg2 import OperationalError, DatabaseError, DataError
 from datetime import datetime, date, time
 import openpyxl
 import re
@@ -13,6 +13,11 @@ import io
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "pco_linea2_secret_key_dev")
+
+# Limite maximo de caracteres por campo (sigue el esquema historico VARCHAR(150)).
+# Se truncan los valores al importar para no romper el INSERT en base de datos
+# cuando el Excel trae responsables multiples o comentarios muy extensos.
+LIMITE_CAMPO = 150
 
 CV_MAP = {
     'E20': ['2001', '2002'],
@@ -917,11 +922,50 @@ def restaurar(id):
     return redirect(url_for('index'))
 
 def extract_tetra(texto):
+    """Extrae códigos TETRA tipo 22NNN de un texto libre.
+    Busca el patron '22' seguido de 3 digitos, pero SOLO cuando el codigo es
+    un token independiente (no esta Pegado a otros digitos). Para ello quitamos
+    primero los espacios redundantes y normbars, pero usando separadores
+    (coma o salto) para no mezclar codigos distintos al quitar espacios."""
     if not texto:
         return ''
-    texto = str(texto).replace(' ', '').replace('\n', ' ')
-    matches = re.findall(r'(?<!\d)22\d{3}(?!\d)', texto)
-    return ', '.join(matches) if matches else ''
+    # Normalizamos nbsp y saltos a espacios limpios
+    s = str(texto).replace('\xa0', ' ').replace('\n', ' ')
+    # Reemplazamos delimitadores tipicos (comas, punto y coma, guiones)
+    # por espacios para que cada quique sea un token separado.
+    s = re.sub(r'[,\;/\-]|(?<=\d):', ' ', s)
+    # Colapsamos espacios multiples
+    s = re.sub(r'\s+', ' ', s).strip()
+    # Ahora buscamos tokens: cualquier codigo 22NNN rodeado por
+    # no-digitos (o bordes de la cadena).
+    matches = re.findall(r'(?<!\d)22\d{3}(?!\d)', s)
+    # Deduplicar preservando el orden y unir con coma
+    seen = []
+    for m in matches:
+        if m not in seen:
+            seen.append(m)
+    return ', '.join(seen)
+
+
+def _truncar(texto, limite=LIMITE_CAMPO):
+    """Trunca un texto al limite de caracteres soportado por la BD (VARCHAR(150)).
+    Evita el error 'value too long for type character varying(150)'."""
+    if texto is None:
+        return ''
+    s = str(texto).strip()
+    if len(s) <= limite:
+        return s
+    return s[:limite]
+
+
+def _limpiar_nbsp(texto):
+    """Limpia valores nbsp/N/A tipicos del Excel que llegan como comentario vacio."""
+    if not texto:
+        return ''
+    s = str(texto).strip()
+    if s in ('\xa0', '\\xa0', 'N/A', 'n/a'):
+        return ''
+    return s
 
 
 @app.route('/importar_excel', methods=['POST'])
@@ -932,7 +976,15 @@ def importar_excel():
     if file.filename == '':
         return jsonify({'error': 'Nombre de archivo vacío'}), 400
 
-    wb = openpyxl.load_workbook(file)
+    try:
+        # data_only=True: lee el valor evaluado de las celdas con fórmulas en
+        # vez de la fórmula misma. Si el archivo fue abierto y guardado por
+        # Excel, los valores cacheados estan disponibles; si no, las celdas con
+        # formula devolveran None y se trataran como vacio.
+        wb = openpyxl.load_workbook(file, data_only=True)
+    except Exception as e:
+        app.logger.error(f"importar_excel: no se pudo leer el archivo: {e}")
+        return jsonify({'error': 'No se pudo leer el archivo Excel. Verifica que sea .xlsx valido y no este corrupto.'}), 400
     ws = wb.active
 
     # ====== DETECCIÓN AUTOMÁTICA DE CABECERAS (fila con "ESTADO") ======
@@ -1035,33 +1087,41 @@ def importar_excel():
         # Si ambos existen y el principal está vacío, usar el secundario.
         comentario_permiso = ''
         if 'comentario' in col_idx:
-            comentario_permiso = str(_get('comentario')).strip()
+            comentario_permiso = _limpiar_nbsp(_get('comentario'))
         if not comentario_permiso and 'comentario_pco' in col_idx:
-            comentario_permiso = str(_get('comentario_pco')).strip()
-        # Limpieza: si solo trae un nbsp o类似的
-        if comentario_permiso in ('\\xa0', '\xa0', 'N/A', 'n/a'):
-            comentario_permiso = ''
+            comentario_permiso = _limpiar_nbsp(_get('comentario_pco'))
 
         datos.append({
-            'spco': str(spco).strip(),
-            'operador': str(operador).strip(),
-            'desde': str(desde).strip(),
-            'hasta': str(hasta).strip(),
-            'responsable': str(responsable).strip(),
-            'tetra': tetra,
-            'orden_trabajo': str(orden_trabajo).strip(),
-            'empresa': str(empresa).strip(),
-            'comentario': comentario_permiso,
+            'spco': _truncar(spco),
+            'operador': _truncar(operador),
+            'desde': _truncar(desde),
+            'hasta': _truncar(hasta),
+            'responsable': _truncar(responsable),
+            'tetra': _truncar(tetra, 60),
+            'orden_trabajo': _truncar(orden_trabajo),
+            'empresa': _truncar(empresa),
+            'comentario': _truncar(comentario_permiso),
         })
 
     wb.close()
 
-    # Guardar en sesión para persistir entre recargas
-    prev = session.get('importados_pendientes', [])
-    prev.extend(datos)
-    session['importados_pendientes'] = prev
+    # Guardar en sesión para persistir entre recargas.
+    # Nota: la sesión por defecto de Flask se guarda en una cookie firmada con
+    # limite de ~4KB. Si la lista de importados crece mucho (filas con
+    # comentarios extensos), la cookie se satura y la sesión se pierde en
+    # silencio. Por eso truncamos arriba y, además, capturamos errores aquí.
+    try:
+        prev = session.get('importados_pendientes', [])
+        prev.extend(datos)
+        session['importados_pendientes'] = prev
+    except Exception as e:
+        app.logger.error(f"importar_excel: no se pudo guardar la sesion ({len(datos)} filas): {e}")
+        return jsonify({
+            'error': 'La sesión superó el tamaño máximo (demasiados registros con texto largo). '
+                    'Importa en bloques más pequeños o contacta al administrador.'
+        }), 500
 
-    return jsonify({'datos': datos})
+    return jsonify({'datos': datos, 'total': len(datos)})
 
 
 @app.route('/importar_texto', methods=['POST'])
@@ -1175,31 +1235,35 @@ def importar_texto():
 
             comentario_permiso = ''
             if 'comentario' in cabecera_idx:
-                comentario_permiso = getcampo('comentario').strip()
+                comentario_permiso = _limpiar_nbsp(getcampo('comentario'))
             if not comentario_permiso and 'comentario_pco' in cabecera_idx:
-                comentario_permiso = getcampo('comentario_pco').strip()
-            if comentario_permiso in ('\xa0', 'N/A', 'n/a'):
-                comentario_permiso = ''
+                comentario_permiso = _limpiar_nbsp(getcampo('comentario_pco'))
 
             datos.append({
-                'spco': getcampo('spco'),
-                'operador': getcampo('operador'),
-                'desde': getcampo('desde'),
-                'hasta': getcampo('hasta'),
-                'responsable': getcampo('responsable'),
-                'tetra': tetra,
-                'orden_trabajo': getcampo('orden_trabajo'),
-                'empresa': getcampo('empresa'),
-                'comentario': comentario_permiso,
+                'spco': _truncar(getcampo('spco')),
+                'operador': _truncar(getcampo('operador')),
+                'desde': _truncar(getcampo('desde')),
+                'hasta': _truncar(getcampo('hasta')),
+                'responsable': _truncar(getcampo('responsable')),
+                'tetra': _truncar(tetra, 60),
+                'orden_trabajo': _truncar(getcampo('orden_trabajo')),
+                'empresa': _truncar(getcampo('empresa')),
+                'comentario': _truncar(comentario_permiso),
             })
 
     if not datos:
         return jsonify({'error': 'No se encontraron filas CONFIRMADAS con ACCESO=SI en el texto pegado'}), 400
 
-    # Guardar en sesión (igual que importar_excel)
-    prev = session.get('importados_pendientes', [])
-    prev.extend(datos)
-    session['importados_pendientes'] = prev
+    # Guardar en sesion (igual que importar_excel), con manejo de errores.
+    try:
+        prev = session.get('importados_pendientes', [])
+        prev.extend(datos)
+        session['importados_pendientes'] = prev
+    except Exception as e:
+        app.logger.error(f"importar_texto: no se pudo guardar la sesion ({len(datos)} filas): {e}")
+        return jsonify({
+            'error': 'La sesión superó el tamaño máximo. Importa en bloques más pequeños.'
+        }), 500
 
     return jsonify({'datos': datos, 'total': len(datos)})
 
@@ -1236,18 +1300,17 @@ def _parsear_fila_fija(fila):
     tetra = extract_tetra(celular_tetra)
     # REQUERIMIENTOS ADICIONALES / COMENTARIOS era col 23 (index 22) en el Excel
     comentario = (fila[22] if len(fila) > 22 else '') or ''
-    if str(comentario).strip() in ('\xa0', 'N/A', 'n/a'):
-        comentario = ''
+    comentario = _limpiar_nbsp(comentario)
     return {
-        'spco': str(spco).strip(),
-        'operador': str(operador).strip(),
-        'desde': str(desde).strip(),
-        'hasta': str(hasta).strip(),
-        'responsable': str(responsable).strip(),
-        'tetra': tetra,
-        'orden_trabajo': str(orden_trabajo).strip(),
-        'empresa': str(empresa).strip(),
-        'comentario': str(comentario).strip(),
+        'spco': _truncar(spco),
+        'operador': _truncar(operador),
+        'desde': _truncar(desde),
+        'hasta': _truncar(hasta),
+        'responsable': _truncar(responsable),
+        'tetra': _truncar(tetra, 60),
+        'orden_trabajo': _truncar(orden_trabajo),
+        'empresa': _truncar(empresa),
+        'comentario': _truncar(comentario),
     }
 
 
@@ -1265,16 +1328,16 @@ def confirmar_importado():
             return jsonify({'success': False, 'error': f'Índice {idx} fuera de rango. Hay {len(pendientes)} pendientes. Recarga la página y vuelve a importar.'}), 400
 
         turno = session.get('turno', 'Turno 1')
-        operador = item.get('operador', session.get('operador_turno', 'Importado'))
-        spco = item.get('spco', session.get('spco_turno', 'Importado'))
-        empresa = item.get('empresa', '')
-        orden_trabajo = item.get('orden_trabajo', '')
-        responsable = item.get('responsable', '')
-        desde = item.get('desde', '')
-        hasta = item.get('hasta', '')
-        zona = f"{desde} -> {hasta}" if desde and hasta else (desde or hasta)
-        tetra = item.get('tetra', '')
-        comentario = item.get('comentario', '')
+        operador = _truncar(item.get('operador', session.get('operador_turno', 'Importado')))
+        spco = _truncar(item.get('spco', session.get('spco_turno', 'Importado')))
+        empresa = _truncar(item.get('empresa', ''))
+        orden_trabajo = _truncar(item.get('orden_trabajo', ''))
+        responsable = _truncar(item.get('responsable', ''))
+        desde = _truncar(item.get('desde', ''))
+        hasta = _truncar(item.get('hasta', ''))
+        zona = _truncar(f"{desde} -> {hasta}" if desde and hasta else (desde or hasta))
+        tetra = _truncar(item.get('tetra', ''), 60)
+        comentario = _truncar(item.get('comentario', ''))
 
         hora_inicio_str = data.get('hora_inicio', '')
         hora_inicio = parse_hora_flexible(hora_inicio_str)
@@ -1292,7 +1355,30 @@ def confirmar_importado():
             """, (turno, operador, spco, empresa, orden_trabajo, responsable, zona, tetra, hora_inicio, comentario))
             new_id = cur.fetchone()[0]
             conn.commit()
+        except DataError as e:
+            # StringDataRightTruncation u otros datos invalidos. Hacemos rollback
+            # y devolvemos un mensaje claro para que el frontend lo muestre.
+            pgcode = getattr(e, 'pgcode', '') or ''
+            try:
+                if conn:
+                    conn.rollback()
+            except Exception:
+                pass
+            app.logger.error(f"confirmar_importado DataError ({pgcode}): {e}")
+            if pgcode == '22001':  # string_data_right_truncation
+                return jsonify({
+                    'success': False,
+                    'error': 'Uno de los campos (responsable o comentario) supera el límite '
+                            f'de {LIMITE_CAMPO} caracteres permitido por la base de datos. '
+                            'Acorta el texto e intenta de nuevo.'
+                }), 400
+            return jsonify({'success': False, 'error': f'Datos inválidos: {e}'}), 400
         except (OperationalError, DatabaseError) as e:
+            try:
+                if conn:
+                    conn.rollback()
+            except Exception:
+                pass
             app.logger.error(f"confirmar_importado DB error: {e}")
             return jsonify({'success': False, 'error': 'Error de base de datos al confirmar. Intenta de nuevo.'}), 500
         finally:
