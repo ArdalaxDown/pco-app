@@ -29,6 +29,14 @@ print('{}=', s.count('{'), '{', s.count('}'))
 
 Run this after ANY JavaScript edit in `index.html`. A mismatch breaks the entire page silently.
 
+### Auto-git push
+
+After EVERY successful change (code, AGENTS.md, etc.), stage, commit, and push to `origin/main`. Use a concise Spanish commit message describing what was done.
+
+## Auto-logging rule
+
+At the end of each session, update the **Historial de cambios recientes** section below with a bullet-point summary of everything done in this session. This ensures the next AI session has full context without re-reading the conversation.
+
 ## Architecture (key sections in app.py)
 
 | Lines | Section                             | FS Notes                                                           |
