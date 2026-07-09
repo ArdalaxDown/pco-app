@@ -38,11 +38,11 @@ Run this after ANY JavaScript edit in `index.html`. A mismatch breaks the entire
 | 231-255 | `get_db_connection` (Neon/local)    | Retry logic; calls `SET TIME ZONE 'America/Lima'` per session. |
 | 273-290 | `normalizar_zonas` / Safety         | Safety is evaluated intersection-based on `ZONE_POSITIONS` keys. |
 | 319-352 | `/` route (index)                   | Filters `WHERE archivado=FALSE AND (fecha=CURRENT_DATE OR estado='En Vía')`. |
-| 427-455 | `_clasificar_zona` (selector cats)  | Must be updated when new zones are added. |
-| 431-435 | `/api/zonas_catalogo`               | JSON catalog groups `ZONE_POSITIONS` into categories for frontend selector. |
-| 492-537 | `/api/validar_zonas`                | Validates custom zone strings against `ZONE_POSITIONS` + `SINONIMOS`. |
-| 977-1133 | `/importar_excel` + `/confirmar_importado` + `/ingresar` | OT duplication check, VARCHAR truncation. |
-| 2270 | EOF                                 |                                                                   |
+| 431-455 | `_clasificar_zona` (selector cats)  | Must be updated when new zones are added. |
+| 464-498 | `/api/zonas_catalogo`               | JSON catalog groups `ZONE_POSITIONS` into categories for frontend selector. |
+| 557-600 | `/api/validar_zonas`                | Validates custom zone strings against `ZONE_POSITIONS` + `SINONIMOS`. |
+| 1240-1703 | `/importar_excel` + `/confirmar_importado` + `/ingresar` + `/importar_texto` | OT duplication check, VARCHAR truncation, text import. |
+| 2272 | EOF                                 |                                                                   |
 
 ## DB Constraints
 
@@ -99,3 +99,10 @@ Path: **`/api/zonas_catalogo` → `index.html` modal `#modalSelectorZona`**
 - Defined once in `api_validar_zonas` (app.py:553+). Example: `ESTACION22 -> E22`, `CAJA TIPO 1 RAMAL D1 -> D1`.
 - New alias: add to `SINONIMOS` dict and verify with `POST /api/validar_zonas` (test client).
 - Currently (~17 entries). If a new Excel format is detected, add its mapping here.
+
+## Historial de cambios recientes
+
+- **NTA/NTP**: Agregadas a `ZONE_POSITIONS` (app.py:201-202) y clasificadas como `ptsa` en `_clasificar_zona`.
+- **Filtro chips/popover por categoría**: `renderChipsPorCategoria` y `onClicAreaZona` ahora respetan `filtroMapa` — en modo "Estaciones" solo se ven/eligen estaciones, sin tramos mezclados.
+- **Acceso a vía en importación**: Tanto en `importar_excel` como `importar_texto` y `_parsear_fila_fija`, ahora se salta filas solo si `acceso == 'NO'`; antes solo aceptaba `'SI'`. `estado` debe seguir siendo `'CONFIRMADA'`.
+- **Respaldo DB**: Se sugirió `pg_dump` diario como backup de Neon. Tener clon local del repo para emergencias si Render cae.
