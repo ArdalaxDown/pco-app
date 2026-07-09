@@ -1336,7 +1336,7 @@ def importar_excel():
 
         if str(estado_val).strip().upper() != 'CONFIRMADA':
             continue
-        if str(acceso_val).strip().upper() != 'SI':
+        if str(acceso_val).strip().upper() == 'NO':
             continue
 
         spco = _get('spco')
@@ -1490,7 +1490,7 @@ def importar_texto():
 
             if estado_val != 'CONFIRMADA':
                 continue
-            if acceso_val != 'SI':
+            if acceso_val == 'NO':
                 continue
 
             def getcampo(campo):
@@ -1521,7 +1521,7 @@ def importar_texto():
             })
 
     if not datos:
-        return jsonify({'error': 'No se encontraron filas CONFIRMADAS con ACCESO=SI en el texto pegado'}), 400
+        return jsonify({'error': 'No se encontraron filas CONFIRMADAS con ACCESO distinto de NO en el texto pegado'}), 400
 
     # Guardar en sesion (igual que importar_excel), con manejo de errores.
     try:
@@ -1556,7 +1556,7 @@ def _parsear_fila_fija(fila):
     acceso = (fila[13] if len(fila) > 13 else '') or ''
     if str(estado).strip().upper() != 'CONFIRMADA':
         return None
-    if str(acceso).strip().upper() != 'SI':
+    if str(acceso).strip().upper() == 'NO':
         return None
     spco = (fila[2] if len(fila) > 2 else '') or ''
     operador = (fila[4] if len(fila) > 4 else '') or ''
