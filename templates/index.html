@@ -107,36 +107,6 @@
         .badge-en-via { background: var(--ml-red); color: #fff; }
         .badge-liberado { background: var(--ml-gray); color: #fff; }
 
-        /* Fila de trabajo finalizado (con hora fin) - estilo estético y distinguido */
-        .table-pco tbody tr.fila-finalizado {
-            background: linear-gradient(90deg, rgba(0, 160, 220, 0.12) 0%, rgba(27, 58, 107, 0.06) 100%);
-            position: relative;
-        }
-        .table-pco tbody tr.fila-finalizado::before {
-            content: '';
-            position: absolute;
-            left: 0; top: 0; bottom: 0; width: 4px;
-            background: linear-gradient(180deg, var(--ml-cyan) 0%, var(--ml-blue) 100%);
-        }
-        .table-pco tbody tr.fila-finalizado td {
-            color: #3d444a;
-            background: transparent;
-        }
-        .table-pco tbody tr.fila-finalizado td:first-child {
-            border-left: 4px solid var(--ml-cyan);
-        }
-        .table-pco tbody tr.fila-finalizado .fw-bold {
-            color: #2c3a52;
-            font-weight: 600;
-        }
-        .table-pco tbody tr.fila-finalizado .badge-liberado {
-            background: var(--ml-cyan);
-            box-shadow: 0 2px 6px rgba(0, 160, 220, 0.4);
-        }
-        .table-pco tbody tr.fila-finalizado:hover {
-            background: linear-gradient(90deg, rgba(0, 160, 220, 0.18) 0%, rgba(27, 58, 107, 0.1) 100%) !important;
-        }
-
         /* Cabecera de turno */
         .turno-chip {
             display: inline-block; background: var(--ml-yellow); color: var(--ml-blue-dark);
@@ -553,7 +523,7 @@
                                 </thead>
                                 <tbody>
                                     {% for r in registros %}
-                                    <tr class="fila-monitoreo {% if r[12] %}fila-finalizado{% endif %}"
+                                    <tr class="fila-monitoreo {% if r[12] %}table-light opacity-75 text-muted{% endif %}"
                                         data-ot="{{ (r[4] or '') }}"
                                         data-empresa="{{ (r[3] or '') }}"
                                         data-responsable="{{ (r[5] or '') }}"
