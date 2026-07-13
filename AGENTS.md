@@ -112,5 +112,5 @@ Path: **`/api/zonas_catalogo` → `index.html` modal `#modalSelectorZona`**
 
 - **NTA/NTP**: Agregadas a `ZONE_POSITIONS` (app.py:201-202) y clasificadas como `ptsa` en `_clasificar_zona`.
 - **Filtro chips/popover por categoría**: `renderChipsPorCategoria` y `onClicAreaZona` ahora respetan `filtroMapa` — en modo "Estaciones" solo se ven/eligen estaciones, sin tramos mezclados.
-- **Acceso a vía en importación**: Tanto en `importar_excel` como `importar_texto` y `_parsear_fila_fija`, ahora se salta filas solo si `acceso == 'NO'`; antes solo aceptaba `'SI'`. `estado` debe seguir siendo `'CONFIRMADA'`.
+- **Acceso a vía en importación**: Tanto en `importar_excel` como `importar_texto` y `_parsear_fila_fija`, ahora se salta filas solo si `acceso == 'NO'`; antes solo aceptaba `'SI'`. `estado` debe ser `'AUTORIZADA'` (antes era `'CONFIRMADA'`).
 - **Respaldo DB**: Se sugirió `pg_dump` diario como backup de Neon. Tener clon local del repo para emergencias si Render cae.

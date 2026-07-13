@@ -1334,7 +1334,7 @@ def importar_excel():
         estado_val = _get('estado')
         acceso_val = _get('acceso')
 
-        if str(estado_val).strip().upper() != 'CONFIRMADA':
+        if str(estado_val).strip().upper() != 'AUTORIZADA':
             continue
         if str(acceso_val).strip().upper() == 'NO':
             continue
@@ -1397,7 +1397,7 @@ def importar_excel():
 def importar_texto():
     """Importa trabajos pegados como texto TSV (mismo formato que el Excel original).
     Detecta las columnas por su CABECERA (mas robusto al orden cambiante).
-    Filtra igual que el Excel: solo filas CONFIRMADA + ACCESO A VÍA=SI."""
+    Filtra igual que el Excel: solo filas AUTORIZADA + ACCESO A VÍA=SI."""
     data = request.get_json(silent=True) or {}
     texto = (data.get('texto') or '').strip()
     if not texto:
@@ -1488,7 +1488,7 @@ def importar_texto():
             estado_val = fila[cabecera_idx['estado']].strip().upper() if 'estado' in cabecera_idx and len(fila) > cabecera_idx['estado'] else ''
             acceso_val = fila[cabecera_idx['acceso']].strip().upper() if 'acceso' in cabecera_idx and len(fila) > cabecera_idx['acceso'] else ''
 
-            if estado_val != 'CONFIRMADA':
+            if estado_val != 'AUTORIZADA':
                 continue
             if acceso_val == 'NO':
                 continue
@@ -1554,7 +1554,7 @@ def _parsear_fila_fija(fila):
         return None
     estado = (fila[1] if len(fila) > 1 else '') or ''
     acceso = (fila[13] if len(fila) > 13 else '') or ''
-    if str(estado).strip().upper() != 'CONFIRMADA':
+    if str(estado).strip().upper() != 'AUTORIZADA':
         return None
     if str(acceso).strip().upper() == 'NO':
         return None
