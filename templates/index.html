@@ -567,12 +567,12 @@
                                         </td>
                                         <td class="text-nowrap">
                                             {% if not r[12] %}
-                                                <a href="/liberar/{{ r[0] }}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Liberar', '{{ r[4] }}')">Liberar</a>
+                                                <a href="/liberar/{{ r[0] }}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Fin de trabajo', '{{ r[4] }}')">Fin de trabajo</a>
                                             {% else %}
                                                 <a href="/revertir/{{ r[0] }}" class="btn btn-sm btn-ml-yellow fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Revertir', '{{ r[4] }}')">Revertir</a>
                                             {% endif %}
                                             {% if r[4] and r[4] != '-' and r[4] != '' %}
-                                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado({{ r[0] }})">↩ Importados</button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado({{ r[0] }})">↩ Desimportar</button>
                                             {% endif %}
                                             <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-bs-toggle="modal" data-bs-target="#editModal{{ r[0] }}">Corregir</button>
                                             <a href="/eliminar/{{ r[0] }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar por completo?');">🗑️</a>
@@ -1078,8 +1078,8 @@
                         </div>
                     </td>
                     <td class="text-nowrap">
-                        <a href="/liberar/${newId}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion(${newId}, 'Liberar', '${escapeHtml(orden)}')">Liberar</a>
-                        <button type="button" class="btn btn-sm fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado(${newId})">↩ Importados</button>
+                        <a href="/liberar/${newId}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion(${newId}, 'Fin de trabajo', '${escapeHtml(orden)}')">Fin de trabajo</a>
+                        <button type="button" class="btn btn-sm fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado(${newId})">↩ Desimportar</button>
                         <button type="button" class="btn btn-sm btn-outline-secondary me-1" onclick="alert('Recarga la página para editar este registro.')">Corregir</button>
                         <a href="/eliminar/${newId}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar por completo?');">🗑️</a>
                     </td>
