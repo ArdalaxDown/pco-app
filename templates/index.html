@@ -107,6 +107,26 @@
         .badge-en-via { background: var(--ml-red); color: #fff; }
         .badge-liberado { background: var(--ml-gray); color: #fff; }
 
+        /* Fila de trabajo finalizado (con hora fin) - estilo estético y distinguido */
+        .table-pco tbody tr.fila-finalizado {
+            background: linear-gradient(90deg, rgba(0, 160, 220, 0.04) 0%, rgba(110, 115, 118, 0.03) 100%);
+            border-left: 3px solid var(--ml-cyan);
+        }
+        .table-pco tbody tr.fila-finalizado td {
+            color: #4a5258;
+        }
+        .table-pco tbody tr.fila-finalizado .fw-bold {
+            color: #5a6166;
+            font-weight: 600;
+        }
+        .table-pco tbody tr.fila-finalizado .badge-liberado {
+            background: var(--ml-cyan);
+            box-shadow: 0 1px 3px rgba(0, 160, 220, 0.3);
+        }
+        .table-pco tbody tr.fila-finalizado:hover {
+            background: linear-gradient(90deg, rgba(0, 160, 220, 0.08) 0%, rgba(110, 115, 118, 0.05) 100%) !important;
+        }
+
         /* Cabecera de turno */
         .turno-chip {
             display: inline-block; background: var(--ml-yellow); color: var(--ml-blue-dark);
@@ -523,7 +543,7 @@
                                 </thead>
                                 <tbody>
                                     {% for r in registros %}
-                                    <tr class="fila-monitoreo {% if r[12] %}table-light opacity-75 text-muted{% endif %}"
+                                    <tr class="fila-monitoreo {% if r[12] %}fila-finalizado{% endif %}"
                                         data-ot="{{ (r[4] or '') }}"
                                         data-empresa="{{ (r[3] or '') }}"
                                         data-responsable="{{ (r[5] or '') }}"
