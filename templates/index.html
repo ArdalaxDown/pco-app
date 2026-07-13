@@ -109,22 +109,30 @@
 
         /* Fila de trabajo finalizado (con hora fin) - estilo estético y distinguido */
         .table-pco tbody tr.fila-finalizado {
-            background: linear-gradient(90deg, rgba(0, 160, 220, 0.04) 0%, rgba(110, 115, 118, 0.03) 100%);
-            border-left: 3px solid var(--ml-cyan);
+            background: linear-gradient(90deg, rgba(0, 160, 220, 0.12) 0%, rgba(27, 58, 107, 0.06) 100%);
+            border-left: 4px solid var(--ml-cyan);
+            position: relative;
+        }
+        .table-pco tbody tr.fila-finalizado::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0; width: 4px;
+            background: linear-gradient(180deg, var(--ml-cyan) 0%, var(--ml-blue) 100%);
         }
         .table-pco tbody tr.fila-finalizado td {
-            color: #4a5258;
+            color: #3d444a;
+            background: transparent;
         }
         .table-pco tbody tr.fila-finalizado .fw-bold {
-            color: #5a6166;
+            color: #2c3a52;
             font-weight: 600;
         }
         .table-pco tbody tr.fila-finalizado .badge-liberado {
             background: var(--ml-cyan);
-            box-shadow: 0 1px 3px rgba(0, 160, 220, 0.3);
+            box-shadow: 0 2px 6px rgba(0, 160, 220, 0.4);
         }
         .table-pco tbody tr.fila-finalizado:hover {
-            background: linear-gradient(90deg, rgba(0, 160, 220, 0.08) 0%, rgba(110, 115, 118, 0.05) 100%) !important;
+            background: linear-gradient(90deg, rgba(0, 160, 220, 0.18) 0%, rgba(27, 58, 107, 0.1) 100%) !important;
         }
 
         /* Cabecera de turno */
