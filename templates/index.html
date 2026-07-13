@@ -915,7 +915,7 @@
             const ot = (orden && String(orden).trim() !== '' && String(orden).trim() !== '-')
                 ? String(orden).trim()
                 : '(sin orden de trabajo)';
-            const frase = (accion === 'Liberar')
+            const frase = (accion === 'Fin de trabajo')
                 ? '¿Confirmar la SALIDA del trabajo ID ' + id + ' de la vía?\n\n' +
                   'Permiso de trabajo: ' + ot + '\n\n' +
                   'Se registrará la hora de fin y el estado pasará a "Liberado".'
