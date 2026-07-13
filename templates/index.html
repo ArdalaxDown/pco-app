@@ -110,7 +110,6 @@
         /* Fila de trabajo finalizado (con hora fin) - estilo estético y distinguido */
         .table-pco tbody tr.fila-finalizado {
             background: linear-gradient(90deg, rgba(0, 160, 220, 0.12) 0%, rgba(27, 58, 107, 0.06) 100%);
-            border-left: 4px solid var(--ml-cyan);
             position: relative;
         }
         .table-pco tbody tr.fila-finalizado::before {
@@ -122,6 +121,9 @@
         .table-pco tbody tr.fila-finalizado td {
             color: #3d444a;
             background: transparent;
+        }
+        .table-pco tbody tr.fila-finalizado td:first-child {
+            border-left: 4px solid var(--ml-cyan);
         }
         .table-pco tbody tr.fila-finalizado .fw-bold {
             color: #2c3a52;
