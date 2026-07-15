@@ -339,16 +339,33 @@ def evaluar_safety_ingreso(ubicacion_zona, trabajos_activos, usa_vehiculo, tipo_
 def index():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal,
-               num_personas, vaf_tren, conductor, tetra, hora_inicio, hora_fin, 
-               operador_turno, spco_turno, estado, 
-               usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario
-        FROM seguimiento_vias 
-        WHERE archivado = FALSE AND (fecha = CURRENT_DATE OR estado = 'En Vía')
-        ORDER BY (hora_fin IS NOT NULL) ASC, hora_inicio DESC;
-    """)
-    registros = cur.fetchall()
+    # Try query with new column, fallback if column doesn't exist yet
+    try:
+        cur.execute("""
+            SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal,
+                   num_personas, vaf_tren, conductor, tetra, hora_inicio, hora_fin, 
+                   operador_turno, spco_turno, estado, 
+                   usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario
+            FROM seguimiento_vias 
+            WHERE archivado = FALSE AND (fecha = CURRENT_DATE OR estado = 'En Vía')
+            ORDER BY (hora_fin IS NOT NULL) ASC, hora_inicio DESC;
+        """)
+        registros = cur.fetchall()
+    except Exception as e:
+        # Fallback: column doesn't exist yet, use old query
+        conn.rollback()
+        cur.close()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona, '' as ubicacion_zona_peatonal,
+                   num_personas, vaf_tren, conductor, tetra, hora_inicio, hora_fin, 
+                   operador_turno, spco_turno, estado, 
+                   usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario
+            FROM seguimiento_vias 
+            WHERE archivado = FALSE AND (fecha = CURRENT_DATE OR estado = 'En Vía')
+            ORDER BY (hora_fin IS NOT NULL) ASC, hora_inicio DESC;
+        """)
+        registros = cur.fetchall()
     cur.close()
     conn.close()
     
@@ -373,8 +390,16 @@ def index():
 def mapa():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT ubicacion_zona, ubicacion_zona_peatonal, empresa, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, responsable, num_personas, tetra FROM seguimiento_vias WHERE hora_fin IS NULL;")
-    registros_activos = cur.fetchall()
+    # Try query with new column, fallback if column doesn't exist
+    try:
+        cur.execute("SELECT ubicacion_zona, ubicacion_zona_peatonal, empresa, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, responsable, num_personas, tetra FROM seguimiento_vias WHERE hora_fin IS NULL;")
+        registros_activos = cur.fetchall()
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        cur = conn.cursor()
+        cur.execute("SELECT ubicacion_zona, '' as ubicacion_zona_peatonal, empresa, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, responsable, num_personas, tetra FROM seguimiento_vias WHERE hora_fin IS NULL;")
+        registros_activos = cur.fetchall()
     cur.close()
     conn.close()
 
@@ -704,12 +729,24 @@ def verificar_safety():
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("""
-        SELECT empresa, ubicacion_zona, ubicacion_zona_peatonal, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
-        FROM seguimiento_vias 
-        WHERE hora_fin IS NULL;
-    """)
-    trabajos_activos = cur.fetchall()
+    # Try query with new column, fallback if column doesn't exist
+    try:
+        cur.execute("""
+            SELECT empresa, ubicacion_zona, ubicacion_zona_peatonal, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
+            FROM seguimiento_vias 
+            WHERE hora_fin IS NULL;
+        """)
+        trabajos_activos = cur.fetchall()
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT empresa, ubicacion_zona, '' as ubicacion_zona_peatonal, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
+            FROM seguimiento_vias 
+            WHERE hora_fin IS NULL;
+        """)
+        trabajos_activos = cur.fetchall()
     cur.close()
     conn.close()
 
@@ -812,12 +849,24 @@ def ingresar():
         conn = get_db_connection()
         cur = conn.cursor()
         
-        cur.execute("""
-            SELECT empresa, ubicacion_zona, ubicacion_zona_peatonal, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
-            FROM seguimiento_vias 
-            WHERE hora_fin IS NULL;
-        """)
-        trabajos_activos = cur.fetchall()
+        # Try query with new column, fallback if column doesn't exist
+        try:
+            cur.execute("""
+                SELECT empresa, ubicacion_zona, ubicacion_zona_peatonal, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
+                FROM seguimiento_vias 
+                WHERE hora_fin IS NULL;
+            """)
+            trabajos_activos = cur.fetchall()
+        except Exception as e:
+            conn.rollback()
+            cur.close()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT empresa, ubicacion_zona, '' as ubicacion_zona_peatonal, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
+                FROM seguimiento_vias 
+                WHERE hora_fin IS NULL;
+            """)
+            trabajos_activos = cur.fetchall()
         
         # --- MOTOR DE SAFETY ---
         # Validar zonas biviales
@@ -876,11 +925,20 @@ def ingresar():
                 return redirect(url_for('index'))
 
         # --- SI NO HAY PELIGRO, SE INSERTA NORMAL ---
-        cur.execute("""
-            INSERT INTO seguimiento_vias 
-            (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal, num_personas, tetra, fecha, hora_inicio, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, CURRENT_TIME, 'En Vía', %s, %s, %s, %s, %s);
-        """, (turno, operador, spco, empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal, num_personas, tetra, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario))
+        try:
+            cur.execute("""
+                INSERT INTO seguimiento_vias 
+                (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal, num_personas, tetra, fecha, hora_inicio, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, CURRENT_TIME, 'En Vía', %s, %s, %s, %s, %s);
+            """, (turno, operador, spco, empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal, num_personas, tetra, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario))
+        except Exception as e:
+            conn.rollback()
+            # Fallback: insert without the new column
+            cur.execute("""
+                INSERT INTO seguimiento_vias 
+                (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, fecha, hora_inicio, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, CURRENT_TIME, 'En Vía', %s, %s, %s, %s, %s);
+            """, (turno, operador, spco, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario))
         conn.commit()
         cur.close()
         conn.close()
@@ -983,14 +1041,27 @@ def editar(id):
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-            cur.execute("""
-                UPDATE seguimiento_vias 
-                SET empresa = %s, orden_trabajo = %s, responsable = %s, ubicacion_zona = %s, ubicacion_zona_peatonal = %s, num_personas = %s, 
-                    tetra = %s, hora_inicio = %s, hora_fin = %s, estado = %s,
-                    usa_vehiculo = %s, tipo_vehiculo = %s, codigo_vehiculo = %s, conductor_vehiculo = %s,
-                    comentario = %s
-                WHERE id = %s;
-            """, (empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal, num_personas, tetra, hora_inicio, hora_fin, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario, id))
+            # Try update with new column, fallback if column doesn't exist
+            try:
+                cur.execute("""
+                    UPDATE seguimiento_vias 
+                    SET empresa = %s, orden_trabajo = %s, responsable = %s, ubicacion_zona = %s, ubicacion_zona_peatonal = %s, num_personas = %s, 
+                        tetra = %s, hora_inicio = %s, hora_fin = %s, estado = %s,
+                        usa_vehiculo = %s, tipo_vehiculo = %s, codigo_vehiculo = %s, conductor_vehiculo = %s,
+                        comentario = %s
+                    WHERE id = %s;
+                """, (empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal, num_personas, tetra, hora_inicio, hora_fin, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario, id))
+            except Exception as e:
+                conn.rollback()
+                # Fallback: update without new column
+                cur.execute("""
+                    UPDATE seguimiento_vias 
+                    SET empresa = %s, orden_trabajo = %s, responsable = %s, ubicacion_zona = %s, num_personas = %s, 
+                        tetra = %s, hora_inicio = %s, hora_fin = %s, estado = %s,
+                        usa_vehiculo = %s, tipo_vehiculo = %s, codigo_vehiculo = %s, conductor_vehiculo = %s,
+                        comentario = %s
+                    WHERE id = %s;
+                """, (empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, hora_inicio, hora_fin, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario, id))
             conn.commit()
             flash('Registro actualizado correctamente.', 'success')
         except (OperationalError, DatabaseError) as e:
