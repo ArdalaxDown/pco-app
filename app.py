@@ -352,15 +352,16 @@ def index():
         """)
         registros = cur.fetchall()
     except Exception as e:
-        # Fallback: column doesn't exist yet, use old query
+        # Fallback: column doesn't exist yet, use old query with empty column at END
         conn.rollback()
         cur.close()
         cur = conn.cursor()
         cur.execute("""
-            SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona, '' as ubicacion_zona_peatonal,
+            SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona,
                    num_personas, vaf_tren, conductor, tetra, hora_inicio, hora_fin, 
                    operador_turno, spco_turno, estado, 
-                   usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario
+                   usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario,
+                   '' as ubicacion_zona_peatonal
             FROM seguimiento_vias 
             WHERE archivado = FALSE AND (fecha = CURRENT_DATE OR estado = 'En Vía')
             ORDER BY (hora_fin IS NOT NULL) ASC, hora_inicio DESC;
@@ -398,7 +399,7 @@ def mapa():
         conn.rollback()
         cur.close()
         cur = conn.cursor()
-        cur.execute("SELECT ubicacion_zona, '' as ubicacion_zona_peatonal, empresa, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, responsable, num_personas, tetra FROM seguimiento_vias WHERE hora_fin IS NULL;")
+        cur.execute("SELECT ubicacion_zona, empresa, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, responsable, num_personas, tetra, '' as ubicacion_zona_peatonal FROM seguimiento_vias WHERE hora_fin IS NULL;")
         registros_activos = cur.fetchall()
     cur.close()
     conn.close()
@@ -408,14 +409,14 @@ def mapa():
     trabajos_resumen = []
     for reg in registros_activos:
         cadena_zona_bivial = reg[0] or ''
-        cadena_zona_peatonal = reg[1] or ''
-        empresa = reg[2] or ''
-        usa_vehiculo = bool(reg[3])
-        tipo_vehiculo = reg[4] or ''
-        codigo_vehiculo = reg[5] or ''
-        responsable = reg[6] or ''
-        num_personas = reg[7] or 0
-        tetra = reg[8] or ''
+        cadena_zona_peatonal = reg[8] or ''  # moved to end
+        empresa = reg[1] or ''
+        usa_vehiculo = bool(reg[2])
+        tipo_vehiculo = reg[3] or ''
+        codigo_vehiculo = reg[4] or ''
+        responsable = reg[5] or ''
+        num_personas = reg[6] or 0
+        tetra = reg[7] or ''
 
         trabajos_resumen.append({
             'zona': cadena_zona_bivial + (' / ' + cadena_zona_peatonal if cadena_zona_peatonal else ''),
