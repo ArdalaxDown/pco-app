@@ -294,27 +294,44 @@ def evaluar_safety_ingreso(ubicacion_zona, trabajos_activos, usa_vehiculo, tipo_
 
     for trab in trabajos_activos:
         empresa_activa = trab[0]
-        zona_activa_cadena = trab[1]
-        en_via_usa_vehiculo = bool(trab[2])
-        en_via_tipo_vehiculo = trab[3] or "Vehículo Auxiliar"
-        en_via_codigo_vehiculo = trab[4] or "sin código"
+        zona_activa_bivial = trab[1] or ''
+        zona_activa_peatonal = trab[2] or '' if len(trab) > 2 else ''
+        en_via_usa_vehiculo = bool(trab[3]) if len(trab) > 3 else False
+        en_via_tipo_vehiculo = trab[4] or "Vehículo Auxiliar" if len(trab) > 4 else "Vehículo Auxiliar"
+        en_via_codigo_vehiculo = trab[5] or "sin código" if len(trab) > 5 else "sin código"
 
-        partes_activas = normalizar_zonas(zona_activa_cadena)
-        coincidencias = partes_nuevas.intersection(partes_activas)
+        # Comprobar contra zonas biviales activas
+        partes_activas_bivial = normalizar_zonas(zona_activa_bivial)
+        coincidencias = partes_nuevas.intersection(partes_activas_bivial)
 
-        if not coincidencias:
-            continue
+        if coincidencias:
+            if en_via_usa_vehiculo or usa_vehiculo:
+                if en_via_usa_vehiculo and usa_vehiculo:
+                    mensaje = f"❌ RECHAZADO POR SAFETY: La zona '{', '.join(sorted(coincidencias))}' ya tiene movimiento de {en_via_tipo_vehiculo} ({en_via_codigo_vehiculo}) por la empresa '{empresa_activa}' y no se permite otro vehículo en la misma zona."
+                elif en_via_usa_vehiculo:
+                    mensaje = f"❌ RECHAZADO POR SAFETY: La zona '{', '.join(sorted(coincidencias))}' ya tiene movimiento de {en_via_tipo_vehiculo} ({en_via_codigo_vehiculo}) por la empresa '{empresa_activa}'."
+                else:
+                    vehiculo_label = tipo_vehiculo or "vehículo auxiliar"
+                    codigo_label = codigo_vehiculo or "sin código"
+                    mensaje = f"❌ RECHAZADO POR SAFETY: No puedes ingresar el {vehiculo_label} ({codigo_label}) a la zona '{', '.join(sorted(coincidencias))}' porque actualmente hay una cuadrilla peatonal de '{empresa_activa}' trabajando ahí."
+                return True, mensaje
 
-        if en_via_usa_vehiculo or usa_vehiculo:
-            if en_via_usa_vehiculo and usa_vehiculo:
-                mensaje = f"❌ RECHAZADO POR SAFETY: La zona '{', '.join(sorted(coincidencias))}' ya tiene movimiento de {en_via_tipo_vehiculo} ({en_via_codigo_vehiculo}) por la empresa '{empresa_activa}' y no se permite otro vehículo en la misma zona."
-            elif en_via_usa_vehiculo:
-                mensaje = f"❌ RECHAZADO POR SAFETY: La zona '{', '.join(sorted(coincidencias))}' ya tiene movimiento de {en_via_tipo_vehiculo} ({en_via_codigo_vehiculo}) por la empresa '{empresa_activa}'."
-            else:
-                vehiculo_label = tipo_vehiculo or "vehículo auxiliar"
-                codigo_label = codigo_vehiculo or "sin código"
-                mensaje = f"❌ RECHAZADO POR SAFETY: No puedes ingresar el {vehiculo_label} ({codigo_label}) a la zona '{', '.join(sorted(coincidencias))}' porque actualmente hay una cuadrilla peatonal de '{empresa_activa}' trabajando ahí."
-            return True, mensaje
+        # Comprobar contra zonas peatonales activas
+        partes_activas_peatonal = normalizar_zonas(zona_activa_peatonal)
+        coincidencias_peatonal = partes_nuevas.intersection(partes_activas_peatonal)
+
+        if coincidencias_peatonal:
+            # Si hay coincidencia en zona peatonal, aplicar misma lógica
+            if en_via_usa_vehiculo or usa_vehiculo:
+                if en_via_usa_vehiculo and usa_vehiculo:
+                    mensaje = f"❌ RECHAZADO POR SAFETY: La zona peatonal '{', '.join(sorted(coincidencias_peatonal))}' ya tiene movimiento de {en_via_tipo_vehiculo} ({en_via_codigo_vehiculo}) por la empresa '{empresa_activa}' y no se permite otro vehículo en la misma zona."
+                elif en_via_usa_vehiculo:
+                    mensaje = f"❌ RECHAZADO POR SAFETY: La zona peatonal '{', '.join(sorted(coincidencias_peatonal))}' ya tiene movimiento de {en_via_tipo_vehiculo} ({en_via_codigo_vehiculo}) por la empresa '{empresa_activa}'."
+                else:
+                    vehiculo_label = tipo_vehiculo or "vehículo auxiliar"
+                    codigo_label = codigo_vehiculo or "sin código"
+                    mensaje = f"❌ RECHAZADO POR SAFETY: No puedes ingresar el {vehiculo_label} ({codigo_label}) a la zona peatonal '{', '.join(sorted(coincidencias_peatonal))}' porque actualmente hay una cuadrilla peatonal de '{empresa_activa}' trabajando ahí."
+                return True, mensaje
 
     return False, ""
 
@@ -323,7 +340,7 @@ def index():
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona, 
+        SELECT id, fecha, turno, empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal,
                num_personas, vaf_tren, conductor, tetra, hora_inicio, hora_fin, 
                operador_turno, spco_turno, estado, 
                usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario
@@ -356,7 +373,7 @@ def index():
 def mapa():
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT ubicacion_zona, empresa, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, responsable, num_personas, tetra FROM seguimiento_vias WHERE hora_fin IS NULL;")
+    cur.execute("SELECT ubicacion_zona, ubicacion_zona_peatonal, empresa, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, responsable, num_personas, tetra FROM seguimiento_vias WHERE hora_fin IS NULL;")
     registros_activos = cur.fetchall()
     cur.close()
     conn.close()
@@ -365,17 +382,18 @@ def mapa():
     zonas_data = []
     trabajos_resumen = []
     for reg in registros_activos:
-        cadena_zona = reg[0]
-        empresa = reg[1] or ''
-        usa_vehiculo = bool(reg[2])
-        tipo_vehiculo = reg[3] or ''
-        codigo_vehiculo = reg[4] or ''
-        responsable = reg[5] or ''
-        num_personas = reg[6] or 0
-        tetra = reg[7] or ''
+        cadena_zona_bivial = reg[0] or ''
+        cadena_zona_peatonal = reg[1] or ''
+        empresa = reg[2] or ''
+        usa_vehiculo = bool(reg[3])
+        tipo_vehiculo = reg[4] or ''
+        codigo_vehiculo = reg[5] or ''
+        responsable = reg[6] or ''
+        num_personas = reg[7] or 0
+        tetra = reg[8] or ''
 
         trabajos_resumen.append({
-            'zona': cadena_zona,
+            'zona': cadena_zona_bivial + (' / ' + cadena_zona_peatonal if cadena_zona_peatonal else ''),
             'empresa': empresa,
             'responsable': responsable,
             'num_personas': num_personas,
@@ -385,43 +403,85 @@ def mapa():
             'codigo_vehiculo': codigo_vehiculo,
         })
 
-        partes = cadena_zona.replace(',', '+').split('+')
-        for parte in partes:
-            zona_limpia = ' '.join(parte.strip().upper().split())
-            if zona_limpia and zona_limpia not in zonas_ocupadas:
-                zonas_ocupadas.append(zona_limpia)
-            if zona_limpia:
-                rects = get_rects(zona_limpia)
-                if rects:
-                    for rect in rects:
+        # Zonas biviales (con vehículo)
+        if cadena_zona_bivial:
+            partes = cadena_zona_bivial.replace(',', '+').split('+')
+            for parte in partes:
+                zona_limpia = ' '.join(parte.strip().upper().split())
+                if zona_limpia and zona_limpia not in zonas_ocupadas:
+                    zonas_ocupadas.append(zona_limpia)
+                if zona_limpia:
+                    rects = get_rects(zona_limpia)
+                    if rects:
+                        for rect in rects:
+                            zonas_data.append({
+                                'nombre': zona_limpia,
+                                'top': rect.get('top', 0),
+                                'left': rect.get('left', 0),
+                                'width': rect.get('width', 100),
+                                'height': rect.get('height', 50),
+                                'label': rect.get('label', zona_limpia),
+                                'empresa': empresa,
+                                'usa_vehiculo': True,
+                                'tipo_vehiculo': tipo_vehiculo,
+                                'codigo_vehiculo': codigo_vehiculo,
+                                'responsable': responsable,
+                                'num_personas': num_personas,
+                                'tetra': tetra,
+                            })
+                    else:
                         zonas_data.append({
                             'nombre': zona_limpia,
-                            'top': rect.get('top', 0),
-                            'left': rect.get('left', 0),
-                            'width': rect.get('width', 100),
-                            'height': rect.get('height', 50),
-                            'label': rect.get('label', zona_limpia),
+                            'top': 0, 'left': 0, 'width': 100, 'height': 50,
+                            'label': zona_limpia,
                             'empresa': empresa,
-                            'usa_vehiculo': usa_vehiculo,
+                            'usa_vehiculo': True,
                             'tipo_vehiculo': tipo_vehiculo,
                             'codigo_vehiculo': codigo_vehiculo,
                             'responsable': responsable,
                             'num_personas': num_personas,
                             'tetra': tetra,
                         })
-                else:
-                    zonas_data.append({
-                        'nombre': zona_limpia,
-                        'top': 0, 'left': 0, 'width': 100, 'height': 50,
-                        'label': zona_limpia,
-                        'empresa': empresa,
-                        'usa_vehiculo': usa_vehiculo,
-                        'tipo_vehiculo': tipo_vehiculo,
-                        'codigo_vehiculo': codigo_vehiculo,
-                        'responsable': responsable,
-                        'num_personas': num_personas,
-                        'tetra': tetra,
-                    })
+
+        # Zonas peatonales (sin vehículo)
+        if cadena_zona_peatonal:
+            partes = cadena_zona_peatonal.replace(',', '+').split('+')
+            for parte in partes:
+                zona_limpia = ' '.join(parte.strip().upper().split())
+                if zona_limpia and zona_limpia not in zonas_ocupadas:
+                    zonas_ocupadas.append(zona_limpia)
+                if zona_limpia:
+                    rects = get_rects(zona_limpia)
+                    if rects:
+                        for rect in rects:
+                            zonas_data.append({
+                                'nombre': zona_limpia,
+                                'top': rect.get('top', 0),
+                                'left': rect.get('left', 0),
+                                'width': rect.get('width', 100),
+                                'height': rect.get('height', 50),
+                                'label': rect.get('label', zona_limpia),
+                                'empresa': empresa,
+                                'usa_vehiculo': False,
+                                'tipo_vehiculo': '',
+                                'codigo_vehiculo': '',
+                                'responsable': responsable,
+                                'num_personas': num_personas,
+                                'tetra': tetra,
+                            })
+                    else:
+                        zonas_data.append({
+                            'nombre': zona_limpia,
+                            'top': 0, 'left': 0, 'width': 100, 'height': 50,
+                            'label': zona_limpia,
+                            'empresa': empresa,
+                            'usa_vehiculo': False,
+                            'tipo_vehiculo': '',
+                            'codigo_vehiculo': '',
+                            'responsable': responsable,
+                            'num_personas': num_personas,
+                            'tetra': tetra,
+                        })
 
     return render_template('mapa.html', zonas_ocupadas=zonas_ocupadas, zonas_data=zonas_data, trabajos_resumen=trabajos_resumen)
 
@@ -636,6 +696,7 @@ def configurar_turno():
 def verificar_safety():
     data = request.get_json() or {}
     ubicacion_zona = data.get('ubicacion_zona', '')
+    ubicacion_zona_peatonal = data.get('ubicacion_zona_peatonal', '')
     usa_vehiculo = True if data.get('usa_vehiculo') == 'si' or data.get('usa_vehiculo') is True else False
     tipo_vehiculo = data.get('tipo_vehiculo', '')
     codigo_vehiculo = data.get('codigo_vehiculo', '')
@@ -644,7 +705,7 @@ def verificar_safety():
     conn = get_db_connection()
     cur = conn.cursor()
     cur.execute("""
-        SELECT empresa, ubicacion_zona, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
+        SELECT empresa, ubicacion_zona, ubicacion_zona_peatonal, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
         FROM seguimiento_vias 
         WHERE hora_fin IS NULL;
     """)
@@ -652,6 +713,7 @@ def verificar_safety():
     cur.close()
     conn.close()
 
+    # Validar zonas biviales
     bloqueo, mensaje = evaluar_safety_ingreso(
         ubicacion_zona,
         trabajos_activos,
@@ -660,6 +722,17 @@ def verificar_safety():
         codigo_vehiculo,
         empresa
     )
+    
+    # Validar zonas peatonales
+    if not bloqueo and ubicacion_zona_peatonal:
+        bloqueo, mensaje = evaluar_safety_ingreso(
+            ubicacion_zona_peatonal,
+            trabajos_activos,
+            False,
+            '',
+            '',
+            empresa
+        )
 
     return jsonify({
         "bloqueo": bloqueo,
@@ -720,6 +793,7 @@ def ingresar():
         orden_trabajo = request.form.get('orden_trabajo', '-')
         responsable = request.form['responsable']
         ubicacion_zona = request.form['ubicacion_zona']
+        ubicacion_zona_peatonal = request.form.get('ubicacion_zona_peatonal', '').strip()
         num_personas = request.form['num_personas'] or 0
         tetra = request.form['tetra']
         comentario = request.form.get('comentario', '').strip()
@@ -733,18 +807,20 @@ def ingresar():
         session['form_previo'] = request.form.to_dict()
 
         partes_nuevas = [' '.join(p.strip().upper().split()) for p in ubicacion_zona.replace(',', '+').split('+') if p.strip()]
+        partes_peatonal = [' '.join(p.strip().upper().split()) for p in ubicacion_zona_peatonal.replace(',', '+').split('+') if p.strip()]
 
         conn = get_db_connection()
         cur = conn.cursor()
         
         cur.execute("""
-            SELECT empresa, ubicacion_zona, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
+            SELECT empresa, ubicacion_zona, ubicacion_zona_peatonal, usa_vehiculo, tipo_vehiculo, codigo_vehiculo 
             FROM seguimiento_vias 
             WHERE hora_fin IS NULL;
         """)
         trabajos_activos = cur.fetchall()
         
         # --- MOTOR DE SAFETY ---
+        # Validar zonas biviales
         bloqueo_seguridad, mensaje_alerta = evaluar_safety_ingreso(
             ubicacion_zona,
             trabajos_activos,
@@ -753,6 +829,16 @@ def ingresar():
             codigo_vehiculo,
             empresa
         )
+        # Validar zonas peatonales (solo si hay zonas peatonales)
+        if not bloqueo_seguridad and ubicacion_zona_peatonal:
+            bloqueo_seguridad, mensaje_alerta = evaluar_safety_ingreso(
+                ubicacion_zona_peatonal,
+                trabajos_activos,
+                False,  # peatonal no usa vehículo
+                '',
+                '',
+                empresa
+            )
 
         # --- SI HAY BLOQUEO, REDIRIGIMOS PARA MOSTRAR ALERTA ---
         if bloqueo_seguridad:
@@ -792,9 +878,9 @@ def ingresar():
         # --- SI NO HAY PELIGRO, SE INSERTA NORMAL ---
         cur.execute("""
             INSERT INTO seguimiento_vias 
-            (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, fecha, hora_inicio, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, CURRENT_TIME, 'En Vía', %s, %s, %s, %s, %s);
-        """, (turno, operador, spco, empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario))
+            (turno, operador_turno, spco_turno, empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal, num_personas, tetra, fecha, hora_inicio, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_DATE, CURRENT_TIME, 'En Vía', %s, %s, %s, %s, %s);
+        """, (turno, operador, spco, empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal, num_personas, tetra, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario))
         conn.commit()
         cur.close()
         conn.close()
@@ -876,6 +962,7 @@ def editar(id):
         orden_trabajo = request.form.get('orden_trabajo', '-')
         responsable = request.form['responsable']
         ubicacion_zona = request.form['ubicacion_zona']
+        ubicacion_zona_peatonal = request.form.get('ubicacion_zona_peatonal', '')
         num_personas = request.form['num_personas'] or 0
         tetra = request.form['tetra']
         comentario = request.form.get('comentario', '').strip()
@@ -898,12 +985,12 @@ def editar(id):
             cur = conn.cursor()
             cur.execute("""
                 UPDATE seguimiento_vias 
-                SET empresa = %s, orden_trabajo = %s, responsable = %s, ubicacion_zona = %s, num_personas = %s, 
+                SET empresa = %s, orden_trabajo = %s, responsable = %s, ubicacion_zona = %s, ubicacion_zona_peatonal = %s, num_personas = %s, 
                     tetra = %s, hora_inicio = %s, hora_fin = %s, estado = %s,
                     usa_vehiculo = %s, tipo_vehiculo = %s, codigo_vehiculo = %s, conductor_vehiculo = %s,
                     comentario = %s
                 WHERE id = %s;
-            """, (empresa, orden_trabajo, responsable, ubicacion_zona, num_personas, tetra, hora_inicio, hora_fin, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario, id))
+            """, (empresa, orden_trabajo, responsable, ubicacion_zona, ubicacion_zona_peatonal, num_personas, tetra, hora_inicio, hora_fin, estado, usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario, id))
             conn.commit()
             flash('Registro actualizado correctamente.', 'success')
         except (OperationalError, DatabaseError) as e:

@@ -114,3 +114,11 @@ Path: **`/api/zonas_catalogo` → `index.html` modal `#modalSelectorZona`**
 - **Filtro chips/popover por categoría**: `renderChipsPorCategoria` y `onClicAreaZona` ahora respetan `filtroMapa` — en modo "Estaciones" solo se ven/eligen estaciones, sin tramos mezclados.
 - **Acceso a vía en importación**: Tanto en `importar_excel` como `importar_texto` y `_parsear_fila_fija`, ahora se salta filas solo si `acceso == 'NO'`; antes solo aceptaba `'SI'`. `estado` debe ser `'AUTORIZADA'` (antes era `'CONFIRMADA'`).
 - **Respaldo DB**: Se sugirió `pg_dump` diario como backup de Neon. Tener clon local del repo para emergencias si Render cae.
+## Migración BD requerida (Neon / PostgreSQL)
+
+Para soportar zonas peatonales + biviales en el mismo permiso, ejecutar:
+
+```sql
+ALTER TABLE seguimiento_vias 
+ADD COLUMN IF NOT EXISTS ubicacion_zona_peatonal TEXT;
+```

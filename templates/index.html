@@ -351,12 +351,20 @@
                                 <input type="text" class="form-control form-control-sm" name="responsable" value="{{ form_previo.get('responsable', '') }}" required placeholder="Nombre del capataz" {% if not operador_actual %}disabled{% endif %}>
                             </div>
                             <div class="mb-2">
-                                <label class="form-label-l2">Ubicación / Zona de Trabajo</label>
+                                <label class="form-label-l2">Zona de Trabajo BIVIAL 🚜</label>
                                 <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control form-control-sm fw-bold" id="inputUbicacionAlta" style="border-color: var(--ml-blue);" name="ubicacion_zona" value="{{ form_previo.get('ubicacion_zona', '') }}" required placeholder="Ej: E20->E24 + TK1" {% if not operador_actual %}disabled{% endif %}>
-                                    <button type="button" class="btn btn-sm btn-ml-cyan text-white fw-bold" onclick="abrirSelectorZona('inputUbicacionAlta')" {% if not operador_actual %}disabled{% endif %} title="Elegir zonas en el mapa">🗺️ Elegir</button>
+                                    <input type="text" class="form-control form-control-sm fw-bold" id="inputUbicacionBivial" style="border-color: var(--ml-red);" name="ubicacion_zona" value="{{ form_previo.get('ubicacion_zona', '') }}" placeholder="Ej: E20->E24 + TK1" {% if not operador_actual %}disabled{% endif %}>
+                                    <button type="button" class="btn btn-sm btn-ml-red text-white fw-bold" onclick="abrirSelectorZona('inputUbicacionBivial', 'bivial')" {% if not operador_actual %}disabled{% endif %} title="Elegir zonas biviales en el mapa">🗺️ Elegir Bivial</button>
                                 </div>
-                                <div id="alertaZonaAlta" class="small mt-1"></div>
+                                <div id="alertaZonaBivial" class="small mt-1"></div>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label-l2">Zona de Trabajo PEATONAL 🚶</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" class="form-control form-control-sm fw-bold" id="inputUbicacionPeatonal" style="border-color: var(--ml-yellow);" name="ubicacion_zona_peatonal" value="{{ form_previo.get('ubicacion_zona_peatonal', '') }}" placeholder="Ej: D1 + D2 + PTSA" {% if not operador_actual %}disabled{% endif %}>
+                                    <button type="button" class="btn btn-sm btn-ml-yellow text-dark fw-bold" onclick="abrirSelectorZona('inputUbicacionPeatonal', 'peatonal')" {% if not operador_actual %}disabled{% endif %} title="Elegir zonas peatonales en el mapa">🗺️ Elegir Peatonal</button>
+                                </div>
+                                <div id="alertaZonaPeatonal" class="small mt-1"></div>
                             </div>
                             <div class="row mb-2">
                                 <div class="col">
@@ -499,8 +507,14 @@
                                     <option value="empresa_asc">Orden: Empresa (A→Z)</option>
                                 </select>
                             </div>
-                            <div class="col-md-3 text-end">
-                                <span class="badge bg-light text-secondary border" id="contadorMonitoreo">0 trabajos visibles</span>
+                            <div class="col-md-3">
+                                <div class="d-flex justify-content-end gap-2 align-items-center">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="filtroFinalizados" checked onchange="filtrarTablaMonitoreo()" title="Mostrar trabajos finalizados (con hora fin)">
+                                        <label class="form-check-label small text-muted" for="filtroFinalizados">Finalizados</label>
+                                    </div>
+                                    <span class="badge bg-light text-secondary border" id="contadorMonitoreo">0 trabajos visibles</span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -611,10 +625,17 @@
                         <div class="mb-2"><label class="form-label-l2">Orden de Trabajo</label><input type="text" class="form-control form-control-sm" name="orden_trabajo" value="{{ r[4] }}"></div>
                         <div class="mb-2"><label class="form-label-l2">Responsable</label><input type="text" class="form-control form-control-sm" name="responsable" value="{{ r[5] }}" required></div>
                         <div class="mb-2">
-                            <label class="form-label-l2">Zona</label>
+                            <label class="form-label-l2">Zona BIVIAL 🚜</label>
                             <div class="input-group input-group-sm">
                                 <input type="text" class="form-control form-control-sm" id="inputUbicacionEdit{{ r[0] }}" name="ubicacion_zona" value="{{ r[6] }}" required>
-                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirSelectorZona('inputUbicacionEdit{{ r[0] }}')" title="Elegir zonas en el mapa">🗺️</button>
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirSelectorZona('inputUbicacionEdit{{ r[0] }}', 'bivial')" title="Elegir zonas biviales en el mapa">🗺️ Bivial</button>
+                            </div>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label-l2">Zona PEATONAL 🚶</label>
+                            <div class="input-group input-group-sm">
+                                <input type="text" class="form-control form-control-sm" id="inputUbicacionEditPeatonal{{ r[0] }}" name="ubicacion_zona_peatonal" value="{{ r[21] if r[21] else '' }}">
+                                <button type="button" class="btn btn-sm btn-outline-warning" onclick="abrirSelectorZona('inputUbicacionEditPeatonal{{ r[0] }}', 'peatonal')" title="Elegir zonas peatonales en el mapa">🗺️ Peatonal</button>
                             </div>
                         </div>
 
@@ -688,6 +709,7 @@
                     },
                     body: JSON.stringify({
                         ubicacion_zona: ubicacion_zona,
+                        ubicacion_zona_peatonal: document.querySelector('[name="ubicacion_zona_peatonal"]')?.value || '',
                         usa_vehiculo: usa_vehiculo,
                         tipo_vehiculo: tipo_vehiculo,
                         codigo_vehiculo: codigo_vehiculo,
@@ -1124,6 +1146,7 @@
 
             const texto = (document.getElementById('filtroMonitoreo')?.value || '').toLowerCase().trim();
             const orden = document.getElementById('ordenMonitoreo')?.value || 'inicio_desc';
+            const mostrarFinalizados = document.getElementById('filtroFinalizados')?.checked !== false;
 
             // 1) Filtrar
             let visibles = 0;
@@ -1132,10 +1155,11 @@
                 const emp = (f.dataset.empresa || '').toLowerCase();
                 const resp = (f.dataset.responsable || '').toLowerCase();
                 const zona = (f.dataset.zona || '').toLowerCase();
-                const hit = !texto ||
-                    ot.includes(texto) || emp.includes(texto) ||
-                    resp.includes(texto) || zona.includes(texto);
-                if (hit) {
+                const estado = (f.dataset.estado || '').toLowerCase();
+                const esFinalizado = estado === 'liberado' || f.querySelector('td:nth-child(2) .badge-liberado');
+                const hitTexto = !texto || ot.includes(texto) || emp.includes(texto) || resp.includes(texto) || zona.includes(texto);
+                const hitEstado = mostrarFinalizados || !esFinalizado;
+                if (hitTexto && hitEstado) {
                     f.style.display = '';
                     visibles++;
                 } else {
@@ -1201,8 +1225,9 @@
             tramoOrigenSel: null,  // nodo origen ya clicado en modoTramo
         };
 
-        function abrirSelectorZona(inputId) {
+        function abrirSelectorZona(inputId, tipoZona) {
             selectorZonaState.inputTargetId = inputId;
+            selectorZonaState.tipoZonaFiltro = tipoZona || 'todos'; // 'bivial', 'peatonal', 'todos'
             // Precargar con el valor actual del input
             const inp = document.getElementById(inputId);
             selectorZonaState.seleccion = new Set();
@@ -1237,7 +1262,37 @@
             // del editModal sin pisar los otros modales de Bootstrap.
             const dialog = modalEl.querySelector('.modal-dialog');
             if (dialog) dialog.parentElement.style.zIndex = '1070';
+            // Actualizar botones de filtro según tipo
+            actualizarFiltroPorTipo(tipoZona);
             cargarCatalogoZonas();
+        }
+
+        function actualizarFiltroPorTipo(tipo) {
+            const btns = document.querySelectorAll('#filtroMapaGrupo button');
+            const tipoFiltro = selectorZonaState.tipoZonaFiltro || 'todos';
+            
+            btns.forEach(b => {
+                const filtro = b.dataset.filtroMapa;
+                let mostrar = true;
+                
+                if (tipoFiltro === 'bivial') {
+                    // Mostrar solo categorías biviales: estacion, pozo, tramo, tramo_via
+                    const categoriasBivial = ['estacion', 'pozo', 'tramo', 'tramo_via'];
+                    mostrar = categoriasBivial.includes(filtro) || filtro === 'todos';
+                } else if (tipoFiltro === 'peatonal') {
+                    // Mostrar solo categorías peatonales: ptsa, deposito
+                    const categoriasPeatonal = ['ptsa', 'deposito'];
+                    mostrar = categoriasPeatonal.includes(filtro) || filtro === 'todos';
+                }
+                
+                b.style.display = mostrar ? '' : 'none';
+                if (!mostrar && b.classList.contains('active')) {
+                    b.classList.remove('active');
+                    // Activar "Todos" si el filtro actual se oculta
+                    document.querySelector('#filtroMapaGrupo button[data-filtro-mapa="todos"]').classList.add('active');
+                    selectorZonaState.filtroMapa = 'todos';
+                }
+            });
         }
 
         function cargarCatalogoZonas() {
@@ -1332,6 +1387,7 @@
             if (!selectorZonaState.zonaIndex) construirZonaIndex();
             const cats = selectorZonaState.catalogo.categorias;
             const filtro = selectorZonaState.filtroMapa || 'todos';
+            const tipoZona = selectorZonaState.tipoZonaFiltro || 'todos';
 
             // Si el filtro es tramo o tramo_via -> modo Origen/Destino por clic
             // en lugar de dibujar las 47/38 áreas superpuestas.
@@ -1346,8 +1402,16 @@
                 selectorZonaState.tramoOrigenSel = null;
             }
 
+            // Categorías permitidas por tipo de zona
+            const catsBivial = ['estacion', 'pozo', 'tramo', 'tramo_via'];
+            const catsPeatonal = ['ptsa', 'deposito'];
+
             let total = 0;
             Object.entries(cats).forEach(([cat, items]) => {
+                // Filtrar por tipo de zona (bivial/peatonal)
+                if (tipoZona === 'bivial' && !catsBivial.includes(cat)) return;
+                if (tipoZona === 'peatonal' && !catsPeatonal.includes(cat)) return;
+                // Filtrar por botón de filtro
                 if (filtro !== 'todos' && cat !== filtro) return;
                 items.forEach(z => {
                     (z.rects || []).forEach(r => {
@@ -1785,7 +1849,7 @@
             cerrarPopoverZona();
         });
 
-        function renderChipsPorCategoria() {
+function renderChipsPorCategoria() {
             const cont = document.getElementById('selectorZonaChips');
             if (!cont || !selectorZonaState.catalogo) return;
             cont.innerHTML = '';
@@ -1797,10 +1861,15 @@
                 'tramo_via': '↔️ Tramos por Vía (VIA1 / VIA2)'
             };
             const cats = selectorZonaState.catalogo.categorias;
-            const filtroChips = selectorZonaState.filtroMapa || 'todos';
+            const tipoFiltro = selectorZonaState.tipoZonaFiltro || 'todos';
+            const categoriasBivial = ['estacion', 'pozo', 'tramo', 'tramo_via'];
+            const categoriasPeatonal = ['ptsa', 'deposito'];
+            
             Object.entries(cats).forEach(([cat, items]) => {
                 if (!items.length) return;
-                if (filtroChips !== 'todos' && cat !== filtroChips) return;
+                // Filtrar por tipo de zona
+                if (tipoFiltro === 'bivial' && !categoriasBivial.includes(cat)) return;
+                if (tipoFiltro === 'peatonal' && !categoriasPeatonal.includes(cat)) return;
                 const wrapper = document.createElement('div');
                 wrapper.className = 'mb-2';
                 wrapper.innerHTML = '<div class="small fw-bold text-muted text-uppercase" style="font-size:0.68rem;letter-spacing:0.5px;">' + (titulos[cat] || cat) + '</div>';
