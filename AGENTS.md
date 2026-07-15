@@ -1,5 +1,7 @@
 # AGENTS.md — PCO App (Flask + PostgreSQL · Metro L2)
 
+## ⚠️ IMPORTANTE: Responder SIEMPRE en español
+
 ## Stack
 
 - **Flask 3.1** (monolithic `app.py`, ~2270 líneas)
