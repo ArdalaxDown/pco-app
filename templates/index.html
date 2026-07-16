@@ -361,6 +361,7 @@
                                                 <option value="bivial" selected>🚜 Bivial</option>
                                                 <option value="peatonal">🚶 Peatonal</option>
                                             </select>
+                                            <button type="button" class="btn btn-sm btn-ml-red text-white fw-bold" onclick="abrirSelectorZona(this.closest('.zona-entry').querySelector('.zona-input').id, 'bivial')" {% if not operador_actual %}disabled{% endif %} title="Elegir en mini-mapa">🗺️</button>
                                             <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)" {% if not operador_actual %}disabled{% endif %}>🗑️</button>
                                         </div>
                                         {% endif %}
@@ -371,6 +372,7 @@
                                                 <option value="bivial">🚜 Bivial</option>
                                                 <option value="peatonal" selected>🚶 Peatonal</option>
                                             </select>
+                                            <button type="button" class="btn btn-sm btn-ml-yellow text-dark fw-bold" onclick="abrirSelectorZona(this.closest('.zona-entry').querySelector('.zona-input').id, 'peatonal')" {% if not operador_actual %}disabled{% endif %} title="Elegir en mini-mapa">🗺️</button>
                                             <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)" {% if not operador_actual %}disabled{% endif %}>🗑️</button>
                                         </div>
                                         {% endif %}
@@ -852,12 +854,14 @@
             const container = document.getElementById('zonasTrabajoContainer');
             const div = document.createElement('div');
             div.className = 'zona-entry d-flex gap-2 mb-2';
+            const inputId = 'zonaInput_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
             div.innerHTML = `
-                <input type="text" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-red);" name="zonas_bivial[]" placeholder="Ej: E20->E24 + TK1">
+                <input type="text" id="${inputId}" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-red);" name="zonas_bivial[]" placeholder="Ej: E20->E24 + TK1">
                 <select class="form-select form-select-sm zona-tipo" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]">
                     <option value="bivial" selected>🚜 Bivial</option>
                     <option value="peatonal">🚶 Peatonal</option>
                 </select>
+                <button type="button" class="btn btn-sm btn-ml-red text-white fw-bold" onclick="abrirSelectorZona('${inputId}', 'bivial')" title="Elegir en mini-mapa">🗺️</button>
                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)">🗑️</button>
             `;
             container.appendChild(div);
@@ -927,17 +931,20 @@
             return true;
         }
 
-        // Añadir zona en modal de edición
+// Añadir zona en modal de edición
         function agregarZonaEdit(registroId) {
             const container = document.getElementById('editZonasContainer' + registroId);
+            const zonaCount = container.querySelectorAll('.zona-entry').length;
+            const inputId = 'editZonaInput' + registroId + '_' + zonaCount;
             const div = document.createElement('div');
             div.className = 'zona-entry d-flex gap-2 mb-2';
             div.innerHTML = `
-                <input type="text" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-red);" name="zonas_trabajo[]" placeholder="Ej: E20->E24 + TK1">
+                <input type="text" id="${inputId}" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-red);" name="zonas_trabajo[]" placeholder="Ej: E20->E24 + TK1">
                 <select class="form-select form-select-sm zona-tipo" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]">
                     <option value="bivial" selected>🚜 Bivial</option>
                     <option value="peatonal">🚶 Peatonal</option>
                 </select>
+                <button type="button" class="btn btn-sm btn-ml-red text-white fw-bold" onclick="abrirSelectorZona('${inputId}', 'bivial')" title="Elegir en mini-mapa">🗺️</button>
                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)">🗑️</button>
             `;
             container.appendChild(div);
