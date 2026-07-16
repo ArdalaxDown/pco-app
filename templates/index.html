@@ -332,7 +332,7 @@
                         {% if not operador_actual %}
                             <div class="alert alert-warning py-1 small text-center mb-0">Primero fija los datos del turno arriba.</div>
                         {% endif %}
-                        <form action="/ingresar" method="POST" onsubmit="return validarZonasObligatorias()">
+                        <form action="/ingresar" method="POST" onsubmit="return prepararZonasYValidar()">
                             <div class="mb-2">
                                 <label class="form-label-l2">Empresa (Contratista)</label>
                                 <input type="text" class="form-control form-control-sm" name="empresa" value="{{ form_previo.get('empresa', '') }}" placeholder="Ej: TRIA, TELICE" list="empresas_comunes" required {% if not operador_actual %}disabled{% endif %}>
@@ -351,22 +351,36 @@
                                 <input type="text" class="form-control form-control-sm" name="responsable" value="{{ form_previo.get('responsable', '') }}" required placeholder="Nombre del capataz" {% if not operador_actual %}disabled{% endif %}>
                             </div>
                             <div class="mb-2">
-                                <label class="form-label-l2">Zona de Trabajo BIVIAL 🚜</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control form-control-sm fw-bold" id="inputUbicacionBivial" style="border-color: var(--ml-red);" name="ubicacion_zona" value="{{ form_previo.get('ubicacion_zona', '') }}" placeholder="Ej: E20->E24 + TK1" {% if not operador_actual %}disabled{% endif %}>
-                                    <button type="button" class="btn btn-sm btn-ml-red text-white fw-bold" onclick="abrirSelectorZona('inputUbicacionBivial', 'bivial')" {% if not operador_actual %}disabled{% endif %} title="Elegir zonas biviales en el mapa">🗺️ Elegir Bivial</button>
+                                <label class="form-label-l2">Zonas de Trabajo</label>
+                                <div id="zonasTrabajoContainer">
+                                    {% if form_previo.get('ubicacion_zona') or form_previo.get('ubicacion_zona_peatonal') %}
+                                        {% if form_previo.get('ubicacion_zona') %}
+                                        <div class="zona-entry d-flex gap-2 mb-2">
+                                            <input type="text" class="form-control form-control-sm fw-bold" style="border-color: var(--ml-red);" name="zonas_trabajo[]" value="{{ form_previo.get('ubicacion_zona', '') }}" placeholder="Ej: E20->E24 + TK1" {% if not operador_actual %}disabled{% endif %}>
+                                            <select class="form-select form-select-sm" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]" {% if not operador_actual %}disabled{% endif %}>
+                                                <option value="bivial" selected>🚜 Bivial</option>
+                                                <option value="peatonal">🚶 Peatonal</option>
+                                            </select>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)" {% if not operador_actual %}disabled{% endif %}>🗑️</button>
+                                        </div>
+                                        {% endif %}
+                                        {% if form_previo.get('ubicacion_zona_peatonal') %}
+                                        <div class="zona-entry d-flex gap-2 mb-2">
+                                            <input type="text" class="form-control form-control-sm fw-bold" style="border-color: var(--ml-yellow);" name="zonas_trabajo[]" value="{{ form_previo.get('ubicacion_zona_peatonal', '') }}" placeholder="Ej: D1 + D2 + PTSA" {% if not operador_actual %}disabled{% endif %}>
+                                            <select class="form-select form-select-sm" style="width: auto; border-color: var(--ml-yellow);" name="zonas_tipo[]" {% if not operador_actual %}disabled{% endif %}>
+                                                <option value="bivial">🚜 Bivial</option>
+                                                <option value="peatonal" selected>🚶 Peatonal</option>
+                                            </select>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)" {% if not operador_actual %}disabled{% endif %}>🗑️</button>
+                                        </div>
+                                        {% endif %}
+                                    {% endif %}
                                 </div>
-                                <div id="alertaZonaBivial" class="small mt-1"></div>
+                                <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="agregarZonaTrabajo()" {% if not operador_actual %}disabled{% endif %}>
+                                    ➕ Añadir zona de trabajo (Bivial o Peatonal)
+                                </button>
+                                <div id="alertaZonaRequerida" class="text-danger small mt-1 d-none">⚠️ Debe ingresar al menos una zona de trabajo</div>
                             </div>
-                            <div class="mb-2">
-                                <label class="form-label-l2">Zona de Trabajo PEATONAL 🚶</label>
-                                <div class="input-group input-group-sm">
-                                    <input type="text" class="form-control form-control-sm fw-bold" id="inputUbicacionPeatonal" style="border-color: var(--ml-yellow);" name="ubicacion_zona_peatonal" value="{{ form_previo.get('ubicacion_zona_peatonal', '') }}" placeholder="Ej: D1 + D2 + PTSA" {% if not operador_actual %}disabled{% endif %}>
-                                    <button type="button" class="btn btn-sm btn-ml-yellow text-dark fw-bold" onclick="abrirSelectorZona('inputUbicacionPeatonal', 'peatonal')" {% if not operador_actual %}disabled{% endif %} title="Elegir zonas peatonales en el mapa">🗺️ Elegir Peatonal</button>
-                                </div>
-                                <div id="alertaZonaPeatonal" class="small mt-1"></div>
-                            </div>
-                            <div id="alertaZonaRequerida" class="text-danger small mt-1 d-none">⚠️ Debe ingresar al menos una zona (Bivial o Peatonal)</div>
                             <div class="row mb-2">
                                 <div class="col">
                                     <label class="form-label-l2">N° Pers.</label>
@@ -413,6 +427,10 @@
                             <div id="realtime-safety-alert" class="alert alert-danger d-none fw-bold small py-2 my-2 shadow-sm border border-danger"></div>
                             <!-- ALERTA REALTIME DE OT DUPLICADA -->
                             <div id="realtime-ot-alert" class="alert alert-warning d-none fw-bold small py-2 my-2 shadow-sm border border-warning"></div>
+
+                            <!-- Hidden fields para compatibilidad con backend -->
+                            <input type="hidden" name="ubicacion_zona" id="hiddenUbicacionZona" value="{{ form_previo.get('ubicacion_zona', '') }}">
+                            <input type="hidden" name="ubicacion_zona_peatonal" id="hiddenUbicacionZonaPeatonal" value="{{ form_previo.get('ubicacion_zona_peatonal', '') }}">
 
                             <button type="submit" id="btnAutorizar" class="btn w-100 fw-bold py-2 mt-2 btn-ml-red" {% if not operador_actual %}disabled{% endif %}>AUTORIZAR INGRESO</button>
                         </form>
@@ -745,16 +763,71 @@
 
         // Validar que al menos una zona (bivial o peatonal) esté presente antes de enviar
         function validarZonasObligatorias() {
-            const ubicacion_zona = document.querySelector('[name="ubicacion_zona"]').value;
-            const ubicacion_zona_peatonal = document.querySelector('[name="ubicacion_zona_peatonal"]').value;
+            const container = document.getElementById('zonasTrabajoContainer');
+            const inputs = container.querySelectorAll('input[name="zonas_bivial[]"], input[name="zonas_peatonal[]"]');
             const alertaZonaReq = document.getElementById('alertaZonaRequerida');
             
-            if (!ubicacion_zona.trim() && !ubicacion_zona_peatonal.trim()) {
+            let tieneContenido = false;
+            inputs.forEach(inp => {
+                if (inp.value.trim()) tieneContenido = true;
+            });
+            
+            if (!tieneContenido) {
                 if (alertaZonaReq) alertaZonaReq.classList.remove('d-none');
                 return false;
             }
             if (alertaZonaReq) alertaZonaReq.classList.add('d-none');
             return true;
+        }
+
+        // Preparar hidden fields antes de enviar (combina zonas dinámicas en campos originales)
+        function prepararZonasYValidar() {
+            if (!validarZonasObligatorias()) return false;
+            
+            const container = document.getElementById('zonasTrabajoContainer');
+            const entradas = container.querySelectorAll('.zona-entry');
+            
+            const biviales = [];
+            const peatonales = [];
+            
+            entradas.forEach(entry => {
+                const input = entry.querySelector('input[name="zonas_bivial[]"], input[name="zonas_peatonal[]"]');
+                const select = entry.querySelector('select[name="zonas_tipo[]"]');
+                if (input && input.value.trim()) {
+                    if (select && select.value === 'peatonal') {
+                        peatonales.push(input.value.trim());
+                    } else {
+                        biviales.push(input.value.trim());
+                    }
+                }
+            });
+            
+            document.getElementById('hiddenUbicacionZona').value = biviales.join(' + ');
+            document.getElementById('hiddenUbicacionZonaPeatonal').value = peatonales.join(' + ');
+            
+            return true;
+        }
+
+        // Añadir nueva zona de trabajo
+        function agregarZonaTrabajo() {
+            const container = document.getElementById('zonasTrabajoContainer');
+            const div = document.createElement('div');
+            div.className = 'zona-entry d-flex gap-2 mb-2';
+            div.innerHTML = `
+                <input type="text" class="form-control form-control-sm fw-bold" style="border-color: var(--ml-red);" name="zonas_trabajo[]" placeholder="Ej: E20->E24 + TK1">
+                <select class="form-select form-select-sm" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]">
+                    <option value="bivial" selected>🚜 Bivial</option>
+                    <option value="peatonal">🚶 Peatonal</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)">🗑️</button>
+            `;
+            container.appendChild(div);
+        }
+
+        // Eliminar zona de trabajo
+        function eliminarZona(btn) {
+            const entry = btn.closest('.zona-entry');
+            if (entry) entry.remove();
         }
 
         // Validar zonas en modal de edición (Corregir)
