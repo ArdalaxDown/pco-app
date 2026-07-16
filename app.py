@@ -1341,12 +1341,12 @@ def archivar_turno():
 def restaurar(id):
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("UPDATE seguimiento_vias SET archivado = FALSE, fecha = CURRENT_DATE WHERE id = %s;", (id,))
+    cur.execute("UPDATE seguimiento_vias SET archivado = FALSE, fecha = CURRENT_DATE, estado = 'En Vía', hora_fin = NULL WHERE id = %s;", (id,))
     conn.commit()
     cur.close()
     conn.close()
     
-    flash("✅ Registro restaurado exitosamente. El trabajo está de vuelta en tu panel de Monitoreo para que puedas corregirlo.", "success")
+    flash("✅ Registro restaurado exitosamente. El trabajo está de vuelta en tu panel de Monitoreo como 'En Vía' para que puedas corregirlo.", "success")
     return redirect(url_for('index'))
 
 def extract_tetra(texto):
