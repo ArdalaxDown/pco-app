@@ -332,7 +332,7 @@
                         {% if not operador_actual %}
                             <div class="alert alert-warning py-1 small text-center mb-0">Primero fija los datos del turno arriba.</div>
                         {% endif %}
-                        <form action="/ingresar" method="POST">
+                        <form action="/ingresar" method="POST" onsubmit="return validarZonasObligatorias()">
                             <div class="mb-2">
                                 <label class="form-label-l2">Empresa (Contratista)</label>
                                 <input type="text" class="form-control form-control-sm" name="empresa" value="{{ form_previo.get('empresa', '') }}" placeholder="Ej: TRIA, TELICE" list="empresas_comunes" required {% if not operador_actual %}disabled{% endif %}>
@@ -366,6 +366,7 @@
                                 </div>
                                 <div id="alertaZonaPeatonal" class="small mt-1"></div>
                             </div>
+                            <div id="alertaZonaRequerida" class="text-danger small mt-1 d-none">⚠️ Debe ingresar al menos una zona (Bivial o Peatonal)</div>
                             <div class="row mb-2">
                                 <div class="col">
                                     <label class="form-label-l2">N° Pers.</label>
@@ -615,7 +616,7 @@
                     <h5 class="modal-title">Corregir Registro</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <form action="/editar/{{ r[0] }}" method="POST">
+                <form action="/editar/{{ r[0] }}" method="POST" onsubmit="return validarZonasEdit(this)">
                     <div class="modal-body text-start">
                         <div class="row mb-2">
                             <div class="col"><label class="form-label-l2">Hora Inic.</label><input type="text" class="form-control form-control-sm" name="hora_inicio" value="{{ r[11].strftime('%H:%M:%S') if r[11] else '' }}" required></div>
@@ -686,6 +687,7 @@
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
                 const ubicacion_zona = document.querySelector('[name="ubicacion_zona"]').value;
+                const ubicacion_zona_peatonal = document.querySelector('[name="ubicacion_zona_peatonal"]').value;
                 const usa_vehiculo = document.getElementById('selectVehiculo').value;
                 const tipo_vehiculo = document.querySelector('[name="tipo_vehiculo"]').value;
                 const codigo_vehiculo = document.querySelector('[name="codigo_vehiculo"]').value;
@@ -693,13 +695,18 @@
 
                 const alertDiv = document.getElementById('realtime-safety-alert');
                 const btnSubmit = document.getElementById('btnAutorizar');
+                const alertaZonaReq = document.getElementById('alertaZonaRequerida');
 
-                if (!ubicacion_zona.trim()) {
+                // Validar que al menos una zona esté presente
+                if (!ubicacion_zona.trim() && !ubicacion_zona_peatonal.trim()) {
                     alertDiv.classList.add('d-none');
+                    if (alertaZonaReq) alertaZonaReq.classList.remove('d-none');
                     {% if operador_actual %}
-                    btnSubmit.removeAttribute('disabled');
+                    btnSubmit.setAttribute('disabled', 'true');
                     {% endif %}
                     return;
+                } else {
+                    if (alertaZonaReq) alertaZonaReq.classList.add('d-none');
                 }
 
                 fetch('/verificar_safety', {
@@ -733,6 +740,32 @@
                     console.error('Error al verificar safety:', err);
                 });
             }, 300);
+        }
+
+        // Validar que al menos una zona (bivial o peatonal) esté presente antes de enviar
+        function validarZonasObligatorias() {
+            const ubicacion_zona = document.querySelector('[name="ubicacion_zona"]').value;
+            const ubicacion_zona_peatonal = document.querySelector('[name="ubicacion_zona_peatonal"]').value;
+            const alertaZonaReq = document.getElementById('alertaZonaRequerida');
+            
+            if (!ubicacion_zona.trim() && !ubicacion_zona_peatonal.trim()) {
+                if (alertaZonaReq) alertaZonaReq.classList.remove('d-none');
+                return false;
+            }
+            if (alertaZonaReq) alertaZonaReq.classList.add('d-none');
+            return true;
+        }
+
+        // Validar zonas en modal de edición (Corregir)
+        function validarZonasEdit(form) {
+            const ubicacion_zona = form.querySelector('[name="ubicacion_zona"]').value;
+            const ubicacion_zona_peatonal = form.querySelector('[name="ubicacion_zona_peatonal"]').value;
+            
+            if (!ubicacion_zona.trim() && !ubicacion_zona_peatonal.trim()) {
+                alert('⚠️ Debe ingresar al menos una zona (Bivial o Peatonal)');
+                return false;
+            }
+            return true;
         }
 
         document.addEventListener('DOMContentLoaded', () => {

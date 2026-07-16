@@ -830,11 +830,17 @@ def ingresar():
         empresa = request.form['empresa']
         orden_trabajo = request.form.get('orden_trabajo', '-')
         responsable = request.form['responsable']
-        ubicacion_zona = request.form['ubicacion_zona']
+        ubicacion_zona = request.form.get('ubicacion_zona', '').strip()
         ubicacion_zona_peatonal = request.form.get('ubicacion_zona_peatonal', '').strip()
         num_personas = request.form['num_personas'] or 0
         tetra = request.form['tetra']
         comentario = request.form.get('comentario', '').strip()
+
+        # Validar que al menos una zona esté presente
+        if not ubicacion_zona and not ubicacion_zona_peatonal:
+            flash("⚠️ Debe ingresar al menos una zona de trabajo (Bivial o Peatonal)", "warning")
+            session['form_previo'] = request.form.to_dict()
+            return redirect(url_for('index'))
 
         usa_vehiculo = True if request.form.get('usa_vehiculo') == 'si' else False
         tipo_vehiculo = request.form.get('tipo_vehiculo', '')
