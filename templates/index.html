@@ -625,12 +625,13 @@
                         <div class="mb-2"><label class="form-label-l2">Empresa</label><input type="text" class="form-control form-control-sm" name="empresa" value="{{ r[3] }}" required></div>
                         <div class="mb-2"><label class="form-label-l2">Orden de Trabajo</label><input type="text" class="form-control form-control-sm" name="orden_trabajo" value="{{ r[4] }}"></div>
                         <div class="mb-2"><label class="form-label-l2">Responsable</label><input type="text" class="form-control form-control-sm" name="responsable" value="{{ r[5] }}" required></div>
-                        <div class="mb-2">
+<div class="mb-2">
                             <label class="form-label-l2">Zona BIVIAL 🚜</label>
                             <div class="input-group input-group-sm">
-                                <input type="text" class="form-control form-control-sm" id="inputUbicacionEdit{{ r[0] }}" name="ubicacion_zona" value="{{ r[6] }}" required>
+                                <input type="text" class="form-control form-control-sm" id="inputUbicacionEdit{{ r[0] }}" name="ubicacion_zona" value="{{ r[6] }}" placeholder="Opcional si hay zona peatonal">
                                 <button type="button" class="btn btn-sm btn-outline-primary" onclick="abrirSelectorZona('inputUbicacionEdit{{ r[0] }}', 'bivial')" title="Elegir zonas biviales en el mapa">🗺️ Bivial</button>
                             </div>
+                        </div>
                         </div>
                         <div class="mb-2">
                             <label class="form-label-l2">Zona PEATONAL 🚶</label>
