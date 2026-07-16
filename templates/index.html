@@ -356,8 +356,8 @@
                                     {% if form_previo.get('ubicacion_zona') or form_previo.get('ubicacion_zona_peatonal') %}
                                         {% if form_previo.get('ubicacion_zona') %}
                                         <div class="zona-entry d-flex gap-2 mb-2">
-                                            <input type="text" class="form-control form-control-sm fw-bold" style="border-color: var(--ml-red);" name="zonas_trabajo[]" value="{{ form_previo.get('ubicacion_zona', '') }}" placeholder="Ej: E20->E24 + TK1" {% if not operador_actual %}disabled{% endif %}>
-                                            <select class="form-select form-select-sm" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]" {% if not operador_actual %}disabled{% endif %}>
+                                            <input type="text" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-red);" name="zonas_bivial[]" value="{{ form_previo.get('ubicacion_zona', '') }}" placeholder="Ej: E20->E24 + TK1" {% if not operador_actual %}disabled{% endif %}>
+                                            <select class="form-select form-select-sm zona-tipo" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]" {% if not operador_actual %}disabled{% endif %}>
                                                 <option value="bivial" selected>🚜 Bivial</option>
                                                 <option value="peatonal">🚶 Peatonal</option>
                                             </select>
@@ -366,8 +366,8 @@
                                         {% endif %}
                                         {% if form_previo.get('ubicacion_zona_peatonal') %}
                                         <div class="zona-entry d-flex gap-2 mb-2">
-                                            <input type="text" class="form-control form-control-sm fw-bold" style="border-color: var(--ml-yellow);" name="zonas_trabajo[]" value="{{ form_previo.get('ubicacion_zona_peatonal', '') }}" placeholder="Ej: D1 + D2 + PTSA" {% if not operador_actual %}disabled{% endif %}>
-                                            <select class="form-select form-select-sm" style="width: auto; border-color: var(--ml-yellow);" name="zonas_tipo[]" {% if not operador_actual %}disabled{% endif %}>
+                                            <input type="text" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-yellow);" name="zonas_peatonal[]" value="{{ form_previo.get('ubicacion_zona_peatonal', '') }}" placeholder="Ej: D1 + D2 + PTSA" {% if not operador_actual %}disabled{% endif %}>
+                                            <select class="form-select form-select-sm zona-tipo" style="width: auto; border-color: var(--ml-yellow);" name="zonas_tipo[]" {% if not operador_actual %}disabled{% endif %}>
                                                 <option value="bivial">🚜 Bivial</option>
                                                 <option value="peatonal" selected>🚶 Peatonal</option>
                                             </select>
@@ -705,8 +705,28 @@
         function verificarSafetyRealtime() {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                const ubicacion_zona = document.querySelector('[name="ubicacion_zona"]').value;
-                const ubicacion_zona_peatonal = document.querySelector('[name="ubicacion_zona_peatonal"]').value;
+                // Recopilar todas las zonas dinámicas
+                const container = document.getElementById('zonasTrabajoContainer');
+                const entries = container.querySelectorAll('.zona-entry');
+                
+                let todasBivial = [];
+                let todasPeatonal = [];
+                
+                entries.forEach(entry => {
+                    const input = entry.querySelector('.zona-input');
+                    const select = entry.querySelector('.zona-tipo');
+                    if (input && input.value.trim()) {
+                        if (select && select.value === 'peatonal') {
+                            todasPeatonal.push(input.value.trim());
+                        } else {
+                            todasBivial.push(input.value.trim());
+                        }
+                    }
+                });
+                
+                const ubicacion_zona = todasBivial.join(' + ');
+                const ubicacion_zona_peatonal = todasPeatonal.join(' + ');
+                
                 const usa_vehiculo = document.getElementById('selectVehiculo').value;
                 const tipo_vehiculo = document.querySelector('[name="tipo_vehiculo"]').value;
                 const codigo_vehiculo = document.querySelector('[name="codigo_vehiculo"]').value;
@@ -717,7 +737,7 @@
                 const alertaZonaReq = document.getElementById('alertaZonaRequerida');
 
                 // Validar que al menos una zona esté presente
-                if (!ubicacion_zona.trim() && !ubicacion_zona_peatonal.trim()) {
+                if (!ubicacion_zona && !ubicacion_zona_peatonal) {
                     alertDiv.classList.add('d-none');
                     if (alertaZonaReq) alertaZonaReq.classList.remove('d-none');
                     {% if operador_actual %}
@@ -791,8 +811,8 @@
             const peatonales = [];
             
             entradas.forEach(entry => {
-                const input = entry.querySelector('input[name="zonas_bivial[]"], input[name="zonas_peatonal[]"]');
-                const select = entry.querySelector('select[name="zonas_tipo[]"]');
+                const input = entry.querySelector('.zona-input');
+                const select = entry.querySelector('.zona-tipo');
                 if (input && input.value.trim()) {
                     if (select && select.value === 'peatonal') {
                         peatonales.push(input.value.trim());
@@ -814,14 +834,29 @@
             const div = document.createElement('div');
             div.className = 'zona-entry d-flex gap-2 mb-2';
             div.innerHTML = `
-                <input type="text" class="form-control form-control-sm fw-bold" style="border-color: var(--ml-red);" name="zonas_trabajo[]" placeholder="Ej: E20->E24 + TK1">
-                <select class="form-select form-select-sm" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]">
+                <input type="text" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-red);" name="zonas_bivial[]" placeholder="Ej: E20->E24 + TK1">
+                <select class="form-select form-select-sm zona-tipo" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]">
                     <option value="bivial" selected>🚜 Bivial</option>
                     <option value="peatonal">🚶 Peatonal</option>
                 </select>
                 <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)">🗑️</button>
             `;
             container.appendChild(div);
+            
+            // Actualizar color de borde al cambiar tipo
+            const select = div.querySelector('.zona-tipo');
+            const input = div.querySelector('.zona-input');
+            select.addEventListener('change', () => {
+                if (select.value === 'peatonal') {
+                    input.style.borderColor = 'var(--ml-yellow)';
+                    select.style.borderColor = 'var(--ml-yellow)';
+                    input.name = 'zonas_peatonal[]';
+                } else {
+                    input.style.borderColor = 'var(--ml-red)';
+                    select.style.borderColor = 'var(--ml-red)';
+                    input.name = 'zonas_bivial[]';
+                }
+            });
         }
 
         // Eliminar zona de trabajo
@@ -886,6 +921,24 @@
                     }
                 });
             }
+
+            // Event listeners para selectores de tipo de zona (existentes del form_previo)
+            document.querySelectorAll('.zona-tipo').forEach(select => {
+                const input = select.closest('.zona-entry').querySelector('.zona-input');
+                if (input) {
+                    select.addEventListener('change', () => {
+                        if (select.value === 'peatonal') {
+                            input.style.borderColor = 'var(--ml-yellow)';
+                            select.style.borderColor = 'var(--ml-yellow)';
+                            input.name = 'zonas_peatonal[]';
+                        } else {
+                            input.style.borderColor = 'var(--ml-red)';
+                            select.style.borderColor = 'var(--ml-red)';
+                            input.name = 'zonas_bivial[]';
+                        }
+                    });
+                }
+            });
         });
 
         function verificarOTDuplicadaRealtime() {
