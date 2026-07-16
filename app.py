@@ -370,6 +370,10 @@ def index():
     cur.close()
     conn.close()
     
+    # DEBUG: log cuántos registros y sus estados
+    import logging
+    logging.getLogger(__name__).info(f"Index: {len(registros)} registros - estados: {[r[15] for r in registros]}")
+    
     turno_actual = session.get('turno', 'Turno 1')
     operador_actual = session.get('operador_turno', '')
     spco_actual = session.get('spco_turno', '')
