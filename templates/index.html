@@ -1517,29 +1517,9 @@
 
         function actualizarFiltroPorTipo(tipo) {
             const btns = document.querySelectorAll('#filtroMapaGrupo button');
-            const tipoFiltro = selectorZonaState.tipoZonaFiltro || 'todos';
-            
+            // Mostrar todos los botones de filtro siempre (todas las categorías disponibles)
             btns.forEach(b => {
-                const filtro = b.dataset.filtroMapa;
-                let mostrar = true;
-                
-                if (tipoFiltro === 'bivial') {
-                    // Mostrar solo categorías biviales: estacion, pozo, tramo, tramo_via
-                    const categoriasBivial = ['estacion', 'pozo', 'tramo', 'tramo_via'];
-                    mostrar = categoriasBivial.includes(filtro) || filtro === 'todos';
-                } else if (tipoFiltro === 'peatonal') {
-                    // Mostrar solo categorías peatonales: ptsa, deposito
-                    const categoriasPeatonal = ['ptsa', 'deposito'];
-                    mostrar = categoriasPeatonal.includes(filtro) || filtro === 'todos';
-                }
-                
-                b.style.display = mostrar ? '' : 'none';
-                if (!mostrar && b.classList.contains('active')) {
-                    b.classList.remove('active');
-                    // Activar "Todos" si el filtro actual se oculta
-                    document.querySelector('#filtroMapaGrupo button[data-filtro-mapa="todos"]').classList.add('active');
-                    selectorZonaState.filtroMapa = 'todos';
-                }
+                b.style.display = '';
             });
         }
 
@@ -1650,15 +1630,8 @@
                 selectorZonaState.tramoOrigenSel = null;
             }
 
-            // Categorías permitidas por tipo de zona
-            const catsBivial = ['estacion', 'pozo', 'tramo', 'tramo_via'];
-            const catsPeatonal = ['ptsa', 'deposito'];
-
             let total = 0;
             Object.entries(cats).forEach(([cat, items]) => {
-                // Filtrar por tipo de zona (bivial/peatonal)
-                if (tipoZona === 'bivial' && !catsBivial.includes(cat)) return;
-                if (tipoZona === 'peatonal' && !catsPeatonal.includes(cat)) return;
                 // Filtrar por botón de filtro
                 if (filtro !== 'todos' && cat !== filtro) return;
                 items.forEach(z => {
@@ -2109,15 +2082,9 @@ function renderChipsPorCategoria() {
                 'tramo_via': '↔️ Tramos por Vía (VIA1 / VIA2)'
             };
             const cats = selectorZonaState.catalogo.categorias;
-            const tipoFiltro = selectorZonaState.tipoZonaFiltro || 'todos';
-            const categoriasBivial = ['estacion', 'pozo', 'tramo', 'tramo_via'];
-            const categoriasPeatonal = ['ptsa', 'deposito'];
             
             Object.entries(cats).forEach(([cat, items]) => {
                 if (!items.length) return;
-                // Filtrar por tipo de zona
-                if (tipoFiltro === 'bivial' && !categoriasBivial.includes(cat)) return;
-                if (tipoFiltro === 'peatonal' && !categoriasPeatonal.includes(cat)) return;
                 const wrapper = document.createElement('div');
                 wrapper.className = 'mb-2';
                 wrapper.innerHTML = '<div class="small fw-bold text-muted text-uppercase" style="font-size:0.68rem;letter-spacing:0.5px;">' + (titulos[cat] || cat) + '</div>';
