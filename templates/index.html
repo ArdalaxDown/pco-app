@@ -558,61 +558,61 @@
                                 </thead>
                                 <tbody>
 {% for r in registros %}
-                                     <tr class="fila-monitoreo {% if r[16] %}table-light opacity-75 text-muted{% endif %}"
-                                         data-ot="{{ (r[4] or '') }}"
-                                         data-empresa="{{ (r[3] or '') }}"
-                                         data-responsable="{{ (r[5] or '') }}"
-                                         data-zona="{{ (r[6] or '') }}"
-                                         data-inicio="{{ r[12].strftime('%H:%M:%S') if r[12] else '' }}"
-                                         data-estado="{% if r[16] %}Liberado{% else %}En Vía{% endif %}"
-                                         data-id="{{ r[0] }}">
-                                         <td><span class="badge" style="background:var(--ml-blue);color:#fff;">{{ r[12].strftime('%H:%M:%S') if r[12] else '' }}</span></td>
-                                         <td>
-                                             {% if r[13] %}
-                                                 <span class="badge badge-liberado">{{ r[13].strftime('%H:%M:%S') }}</span>
-                                             {% else %}
-                                                 <span class="badge badge-en-via">En Vía</span>
-                                             {% endif %}
-                                         </td>
-                                         <td><strong>{{ r[3] }}</strong></td>
-                                         <td><span class="badge" style="background:var(--ml-cyan);color:#fff;">{{ r[4] }}</span></td>
-                                         <td>
-                                             <div class="fw-bold">{{ r[5] }}</div>
-                                             <div class="fw-bold {% if not r[13] %}text-danger{% endif %}">{{ r[6] }}{% if r[7] %} <span class="badge bg-warning text-dark ms-1">Peatonal: {{ r[7] }}</span>{% endif %}</div>
-                                             <div class="small text-muted">{{ r[8] }} Pers. | TETRA: {{ r[11] }}</div>
-                                         </td>
-                                         <td>
-                                             {% if r[17] %}
-                                                 <div class="border rounded px-2 py-1 bg-white text-start" style="border-color:var(--ml-red);">
-                                                     <strong class="small" style="color:var(--ml-red);">{{ r[18] }} {{ r[19] }}</strong><br>
-                                                     <span class="small text-muted">Cond: {{ r[20] }}</span>
-                                                 </div>
-                                             {% else %}
-                                                 <span class="badge bg-light text-secondary border">Peatonal</span>
-                                             {% endif %}
-                                         </td>
-                                         <td class="small text-start">
-                                             <strong>ATS:</strong> {{ r[14] }}<br>
-                                             <strong>SPCO:</strong> {{ r[15] }}
-                                         </td>
-                                         <td class="small text-start" style="max-width: 200px;">
-                                             <div id="comentarioDisplay-{{ r[0] }}" class="{% if r[21] %}{% else %}text-muted fst-italic{% endif %}" style="cursor:pointer; min-height: 24px;" onclick="editarComentario({{ r[0] }}, this)" title="Click para agregar/editar comentario">
-                                                 {% if r[21] %}{{ r[21] }}{% else %}<span class="small">+ agregar…</span>{% endif %}
-                                             </div>
-                                         </td>
-                                         <td class="text-nowrap">
-                                             {% if not r[13] %}
-                                                 <a href="/liberar/{{ r[0] }}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Fin de trabajo', '{{ r[4] }}')">Fin de trabajo</a>
-                                             {% else %}
-                                                 <a href="/revertir/{{ r[0] }}" class="btn btn-sm btn-ml-yellow fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Revertir', '{{ r[4] }}')">Revertir</a>
-                                             {% endif %}
-                                             {% if r[4] and r[4] != '-' and r[4] != '' %}
-                                             <button type="button" class="btn btn-sm btn-outline-primary fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado({{ r[0] }})">↩ Desimportar</button>
-                                             {% endif %}
-                                             <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-bs-toggle="modal" data-bs-target="#editModal{{ r[0] }}">Corregir</button>
-                                             <a href="/eliminar/{{ r[0] }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar por completo?');">🗑️</a>
-                                         </td>
-                                     </tr>
+                                      <tr class="fila-monitoreo {% if r[15] == 'Liberado' %}table-light opacity-75 text-muted{% endif %}"
+                                          data-ot="{{ (r[4] or '') }}"
+                                          data-empresa="{{ (r[3] or '') }}"
+                                          data-responsable="{{ (r[5] or '') }}"
+                                          data-zona="{{ (r[6] or '') }}"
+                                          data-inicio="{{ r[11].strftime('%H:%M:%S') if r[11] else '' }}"
+                                          data-estado="{{ r[15] }}"
+                                          data-id="{{ r[0] }}">
+                                          <td><span class="badge" style="background:var(--ml-blue);color:#fff;">{{ r[11].strftime('%H:%M:%S') if r[11] else '' }}</span></td>
+                                          <td>
+                                              {% if r[12] %}
+                                                  <span class="badge badge-liberado">{{ r[12].strftime('%H:%M:%S') }}</span>
+                                              {% else %}
+                                                  <span class="badge badge-en-via">En Vía</span>
+                                              {% endif %}
+                                          </td>
+                                          <td><strong>{{ r[3] }}</strong></td>
+                                          <td><span class="badge" style="background:var(--ml-cyan);color:#fff;">{{ r[4] }}</span></td>
+                                          <td>
+                                              <div class="fw-bold">{{ r[5] }}</div>
+                                              <div class="fw-bold {% if r[15] != 'Liberado' %}text-danger{% endif %}">{{ r[6] }}{% if r[21] %} <span class="badge bg-warning text-dark ms-1">Peatonal: {{ r[21] }}</span>{% endif %}</div>
+                                              <div class="small text-muted">{{ r[7] }} Pers. | TETRA: {{ r[10] }}</div>
+                                          </td>
+                                          <td>
+                                              {% if r[16] %}
+                                                  <div class="border rounded px-2 py-1 bg-white text-start" style="border-color:var(--ml-red);">
+                                                      <strong class="small" style="color:var(--ml-red);">{{ r[17] }} {{ r[18] }}</strong><br>
+                                                      <span class="small text-muted">Cond: {{ r[19] }}</span>
+                                                  </div>
+                                              {% else %}
+                                                  <span class="badge bg-light text-secondary border">Peatonal</span>
+                                              {% endif %}
+                                          </td>
+                                          <td class="small text-start">
+                                              <strong>ATS:</strong> {{ r[13] }}<br>
+                                              <strong>SPCO:</strong> {{ r[14] }}
+                                          </td>
+                                          <td class="small text-start" style="max-width: 200px;">
+                                              <div id="comentarioDisplay-{{ r[0] }}" class="{% if r[20] %}{% else %}text-muted fst-italic{% endif %}" style="cursor:pointer; min-height: 24px;" onclick="editarComentario({{ r[0] }}, this)" title="Click para agregar/editar comentario">
+                                                  {% if r[20] %}{{ r[20] }}{% else %}<span class="small">+ agregar…</span>{% endif %}
+                                              </div>
+                                          </td>
+                                          <td class="text-nowrap">
+                                              {% if r[15] != 'Liberado' %}
+                                                  <a href="/liberar/{{ r[0] }}" class="btn btn-sm btn-ml-red fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Fin de trabajo', '{{ r[4] }}')">Fin de trabajo</a>
+                                              {% else %}
+                                                  <a href="/revertir/{{ r[0] }}" class="btn btn-sm btn-ml-yellow fw-bold me-1" onclick="return confirmarLiberacion({{ r[0] }}, 'Revertir', '{{ r[4] }}')">Revertir</a>
+                                              {% endif %}
+                                              {% if r[4] and r[4] != '-' and r[4] != '' %}
+                                              <button type="button" class="btn btn-sm btn-outline-primary fw-bold me-1" style="color:var(--ml-cyan);border-color:var(--ml-cyan);" onclick="revertirImportado({{ r[0] }})">↩ Desimportar</button>
+                                              {% endif %}
+                                              <button type="button" class="btn btn-sm btn-outline-secondary me-1" data-bs-toggle="modal" data-bs-target="#editModal{{ r[0] }}">Corregir</button>
+                                              <a href="/eliminar/{{ r[0] }}" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar por completo?');">🗑️</a>
+                                          </td>
+                                      </tr>
                                     {% else %}
                                     <tr>
                                         <td colspan="9" class="text-muted py-4">No hay trabajos registrados en vía actualmente.</td>
@@ -646,58 +646,58 @@
                         <div class="mb-2"><label class="form-label-l2">Orden de Trabajo</label><input type="text" class="form-control form-control-sm" name="orden_trabajo" value="{{ r[4] }}"></div>
                         <div class="mb-2"><label class="form-label-l2">Responsable</label><input type="text" class="form-control form-control-sm" name="responsable" value="{{ r[5] }}" required></div>
 <div class="mb-2">
-                             <label class="form-label-l2">Zonas de Trabajo</label>
-                             <div id="editZonasContainer{{ r[0] }}">
-                                 {% if r[6] or r[7] %}
-                                     {% if r[6] %}
-                                     <div class="zona-entry d-flex gap-2 mb-2">
-                                         <input type="text" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-red);" name="zonas_trabajo[]" value="{{ r[6] }}" placeholder="Ej: E20->E24 + TK1">
-                                         <select class="form-select form-select-sm zona-tipo" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]">
-                                             <option value="bivial" selected>🚜 Bivial</option>
-                                             <option value="peatonal">🚶 Peatonal</option>
-                                         </select>
-                                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)">🗑️</button>
-                                     </div>
-                                     {% endif %}
-                                     {% if r[7] %}
-                                     <div class="zona-entry d-flex gap-2 mb-2">
-                                         <input type="text" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-yellow);" name="zonas_trabajo[]" value="{{ r[7] }}" placeholder="Ej: D1 + D2 + PTSA">
-                                         <select class="form-select form-select-sm zona-tipo" style="width: auto; border-color: var(--ml-yellow);" name="zonas_tipo[]">
-                                             <option value="bivial">🚜 Bivial</option>
-                                             <option value="peatonal" selected>🚶 Peatonal</option>
-                                         </select>
-                                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)">🗑️</button>
-                                     </div>
-                                     {% endif %}
-                                 {% endif %}
-                             </div>
-                             <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="agregarZonaEdit({{ r[0] }})">
-                                 ➕ Añadir zona de trabajo (Bivial o Peatonal)
-                             </button>
-                         </div>
-
-                         <!-- Hidden fields para compatibilidad backend -->
-                         <input type="hidden" name="ubicacion_zona" id="hiddenEditUbicacionZona{{ r[0] }}" value="{{ r[6] }}">
-                         <input type="hidden" name="ubicacion_zona_peatonal" id="hiddenEditUbicacionZonaPeatonal{{ r[0] }}" value="{{ r[7] if r[7] else '' }}">
-
-                         <div class="p-2 border rounded mb-2" style="border-color:var(--ml-red)!important;background:#FAFBFC;">
-                             <label class="form-label-l2" style="color:var(--ml-red);">¿Usa Vehículo Auxiliar?</label>
-                             <select class="form-select form-select-sm mb-2" style="border-color:var(--ml-red);" name="usa_vehiculo">
-                                 <option value="no" {% if not r[16] %}selected{% endif %}>No (Trabajo Peatonal)</option>
-                                 <option value="si" {% if r[16] %}selected{% endif %}>Sí</option>
-                             </select>
-                             <div class="row">
-                                 <div class="col-4"><input type="text" class="form-control form-control-sm" name="tipo_vehiculo" placeholder="Tipo" value="{{ r[17] }}"></div>
-                                 <div class="col-4"><input type="text" class="form-control form-control-sm" name="codigo_vehiculo" placeholder="Código" value="{{ r[18] }}"></div>
-                                 <div class="col-4"><input type="text" class="form-control form-control-sm" name="conductor_vehiculo" placeholder="Conductor" value="{{ r[19] }}"></div>
-                             </div>
-                         </div>
-
-<div class="row">
-                              <div class="col mb-2"><label class="form-label-l2">N° Personas</label><input type="number" class="form-control form-control-sm" name="num_personas" value="{{ r[8] }}" required></div>
-                              <div class="col mb-2"><label class="form-label-l2">TETRA</label><input type="text" class="form-control form-control-sm" name="tetra" value="{{ r[11] }}"></div>
+                              <label class="form-label-l2">Zonas de Trabajo</label>
+                              <div id="editZonasContainer{{ r[0] }}">
+                                  {% if r[6] or r[21] %}
+                                      {% if r[6] %}
+                                      <div class="zona-entry d-flex gap-2 mb-2">
+                                          <input type="text" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-red);" name="zonas_trabajo[]" value="{{ r[6] }}" placeholder="Ej: E20->E24 + TK1">
+                                          <select class="form-select form-select-sm zona-tipo" style="width: auto; border-color: var(--ml-red);" name="zonas_tipo[]">
+                                              <option value="bivial" selected>🚜 Bivial</option>
+                                              <option value="peatonal">🚶 Peatonal</option>
+                                          </select>
+                                          <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)">🗑️</button>
+                                      </div>
+                                      {% endif %}
+                                      {% if r[21] %}
+                                      <div class="zona-entry d-flex gap-2 mb-2">
+                                          <input type="text" class="form-control form-control-sm fw-bold zona-input" style="border-color: var(--ml-yellow);" name="zonas_trabajo[]" value="{{ r[21] }}" placeholder="Ej: D1 + D2 + PTSA">
+                                          <select class="form-select form-select-sm zona-tipo" style="width: auto; border-color: var(--ml-yellow);" name="zonas_tipo[]">
+                                              <option value="bivial">🚜 Bivial</option>
+                                              <option value="peatonal" selected>🚶 Peatonal</option>
+                                          </select>
+                                          <button type="button" class="btn btn-sm btn-outline-danger" onclick="eliminarZona(this)">🗑️</button>
+                                      </div>
+                                      {% endif %}
+                                  {% endif %}
+                              </div>
+                              <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="agregarZonaEdit({{ r[0] }})">
+                                  ➕ Añadir zona de trabajo (Bivial o Peatonal)
+                              </button>
                           </div>
-                         <div class="mb-2"><label class="form-label-l2">Comentario del Permiso</label><textarea class="form-control form-control-sm" name="comentario" rows="2" placeholder="Ej. Requiere corte de tensión, disponibilidad de iluminación, etc.">{{ r[21] if r[21] else '' }}</textarea></div>
+
+                          <!-- Hidden fields para compatibilidad backend -->
+                          <input type="hidden" name="ubicacion_zona" id="hiddenEditUbicacionZona{{ r[0] }}" value="{{ r[6] }}">
+                          <input type="hidden" name="ubicacion_zona_peatonal" id="hiddenEditUbicacionZonaPeatonal{{ r[0] }}" value="{{ r[21] if r[21] else '' }}">
+
+                          <div class="p-2 border rounded mb-2" style="border-color:var(--ml-red)!important;background:#FAFBFC;">
+                              <label class="form-label-l2" style="color:var(--ml-red);">¿Usa Vehículo Auxiliar?</label>
+                              <select class="form-select form-select-sm mb-2" style="border-color:var(--ml-red);" name="usa_vehiculo">
+                                  <option value="no" {% if not r[16] %}selected{% endif %}>No (Trabajo Peatonal)</option>
+                                  <option value="si" {% if r[16] %}selected{% endif %}>Sí</option>
+                              </select>
+                              <div class="row">
+                                  <div class="col-4"><input type="text" class="form-control form-control-sm" name="tipo_vehiculo" placeholder="Tipo" value="{{ r[17] }}"></div>
+                                  <div class="col-4"><input type="text" class="form-control form-control-sm" name="codigo_vehiculo" placeholder="Código" value="{{ r[18] }}"></div>
+                                  <div class="col-4"><input type="text" class="form-control form-control-sm" name="conductor_vehiculo" placeholder="Conductor" value="{{ r[19] }}"></div>
+                              </div>
+                          </div>
+
+                          <div class="row">
+                              <div class="col mb-2"><label class="form-label-l2">N° Personas</label><input type="number" class="form-control form-control-sm" name="num_personas" value="{{ r[7] }}" required></div>
+                              <div class="col mb-2"><label class="form-label-l2">TETRA</label><input type="text" class="form-control form-control-sm" name="tetra" value="{{ r[10] }}"></div>
+                          </div>
+                          <div class="mb-2"><label class="form-label-l2">Comentario del Permiso</label><textarea class="form-control form-control-sm" name="comentario" rows="2" placeholder="Ej. Requiere corte de tensión, disponibilidad de iluminación, etc.">{{ r[20] if r[20] else '' }}</textarea></div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
