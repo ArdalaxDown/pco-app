@@ -113,6 +113,8 @@ Ruta: **`/api/zonas_catalogo` → `index.html` modal `#modalSelectorZona`**
 ## Historial de cambios recientes
 
 - **Monitoreo persistente**: Cambio en la query de `/` (index) para mostrar TODOS los trabajos no archivados con estado 'En Vía' o 'Liberado', sin filtro de fecha. Así los trabajos finalizados permanecen visibles en la ventana de monitoreo hasta que el usuario pulsa "Archivar Turno".
+- **Zonas peatonales en monitoreo**: Corregido template `index.html` para mostrar `ubicacion_zona_peatonal` (índice 7) junto a `ubicacion_zona` en la tabla de monitoreo y en el modal "Corregir". Arreglados índices de `num_personas` (8), `tetra` (11), `comentario` (21).
+- **Selector zonas - todo visible**: Eliminado filtro por tipo bivial/peatonal en `renderMiniMapa()` y `renderChipsPorCategoria()` — ahora se ven **todas** las zonas (PTSA, TK1-TK7, D1, D2, NTA, NTP, etc.) siempre, sin importar el input que abre el selector.
 - **NTA/NTP**: Agregadas a `ZONE_POSITIONS` (app.py:201-202) y clasificadas como `ptsa` en `_clasificar_zona`.
 - **Filtro chips/popover por categoría**: `renderChipsPorCategoria` y `onClicAreaZona` ahora respetan `filtroMapa` — en modo "Estaciones" solo se ven/eligen estaciones, sin tramos mezclados.
 - **Acceso a vía en importación**: Tanto en `importar_excel` como `importar_texto` y `_parsear_fila_fija`, ahora se salta filas solo si `acceso == 'NO'`; antes solo aceptaba `'SI'`. `estado` debe ser `'AUTORIZADA'` (antes era `'CONFIRMADA'`).
