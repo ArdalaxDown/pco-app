@@ -119,6 +119,7 @@ Ruta: **`/api/zonas_catalogo` → `index.html` modal `#modalSelectorZona`**
 - **Filtro chips/popover por categoría**: `renderChipsPorCategoria` y `onClicAreaZona` ahora respetan `filtroMapa` — en modo "Estaciones" solo se ven/eligen estaciones, sin tramos mezclados.
 - **Acceso a vía en importación**: Tanto en `importar_excel` como `importar_texto` y `_parsear_fila_fija`, ahora se salta filas solo si `acceso == 'NO'`; antes solo aceptaba `'SI'`. `estado` debe ser `'AUTORIZADA'` (antes era `'CONFIRMADA'`).
 - **Respaldo BD**: Se sugirió `pg_dump` diario como backup de Neon. Tener clon local del repo para emergencias si Render cae.
+- **Manejo robusto de errores BD**: En `/liberar`, `/revertir`, `/eliminar` se captura `Exception` genérica en lugar de solo `OperationalError/DatabaseError` para evitar errores 500 silenciosos y asegurar rollback + feedback al usuario.
 
 ## Migración BD requerida (Neon / PostgreSQL)
 
