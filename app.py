@@ -968,7 +968,7 @@ def liberar(id):
         cur.execute("UPDATE seguimiento_vias SET hora_fin = CURRENT_TIME, estado = 'Liberado' WHERE id = %s;", (id,))
         conn.commit()
         flash('Registro liberado correctamente.', 'success')
-    except (OperationalError, DatabaseError) as e:
+    except Exception as e:
         flash('Error de base de datos al liberar. Intenta de nuevo.', 'danger')
         app.logger.error(f"liberar DB error: {e}")
         if conn:
@@ -990,7 +990,7 @@ def revertir(id):
         cur.execute("UPDATE seguimiento_vias SET hora_fin = NULL, estado = 'En Vía' WHERE id = %s;", (id,))
         conn.commit()
         flash('Registro revertido correctamente.', 'success')
-    except (OperationalError, DatabaseError) as e:
+    except Exception as e:
         flash('Error de base de datos al revertir. Intenta de nuevo.', 'danger')
         app.logger.error(f"revertir DB error: {e}")
         if conn:
@@ -1012,7 +1012,7 @@ def eliminar(id):
         cur.execute("DELETE FROM seguimiento_vias WHERE id = %s;", (id,))
         conn.commit()
         flash('Registro eliminado correctamente.', 'success')
-    except (OperationalError, DatabaseError) as e:
+    except Exception as e:
         flash('Error de base de datos al eliminar. Intenta de nuevo.', 'danger')
         app.logger.error(f"eliminar DB error: {e}")
         if conn:
