@@ -347,7 +347,7 @@ def index():
                    operador_turno, spco_turno, estado, 
                    usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario
             FROM seguimiento_vias 
-            WHERE archivado = FALSE AND (fecha = CURRENT_DATE OR estado = 'En Vía')
+            WHERE archivado = FALSE AND (estado = 'En Vía' OR estado = 'Liberado')
             ORDER BY (hora_fin IS NOT NULL) ASC, hora_inicio DESC;
         """)
         registros = cur.fetchall()
@@ -363,7 +363,7 @@ def index():
                    usa_vehiculo, tipo_vehiculo, codigo_vehiculo, conductor_vehiculo, comentario,
                    '' as ubicacion_zona_peatonal
             FROM seguimiento_vias 
-            WHERE archivado = FALSE AND (fecha = CURRENT_DATE OR estado = 'En Vía')
+            WHERE archivado = FALSE AND (estado = 'En Vía' OR estado = 'Liberado')
             ORDER BY (hora_fin IS NOT NULL) ASC, hora_inicio DESC;
         """)
         registros = cur.fetchall()

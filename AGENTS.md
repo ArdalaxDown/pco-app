@@ -47,7 +47,7 @@ At the end of each session, update the **Historial de cambios recientes** sectio
 | 61-200| `ZONE_POSITIONS` (cont)             | ~160 zones; keys like `'E20'`, `'E20->E21 VIA1'`, `'D1'`, `'TK1'` |
 | 231-255 | `get_db_connection` (Neon/local)    | Retry logic; calls `SET TIME ZONE 'America/Lima'` per session. |
 | 273-290 | `normalizar_zonas` / Safety         | Safety is evaluated intersection-based on `ZONE_POSITIONS` keys. |
-| 319-352 | `/` route (index)                   | Filters `WHERE archivado=FALSE AND (fecha=CURRENT_DATE OR estado='En Vía')`. |
+| 319-352 | `/` route (index)                   | Filters `WHERE archivado=FALSE AND estado IN ('En Vía','Liberado')` (all days). |
 | 431-455 | `_clasificar_zona` (selector cats)  | Must be updated when new zones are added. |
 | 464-498 | `/api/zonas_catalogo`               | JSON catalog groups `ZONE_POSITIONS` into categories for frontend selector. |
 | 557-600 | `/api/validar_zonas`                | Validates custom zone strings against `ZONE_POSITIONS` + `SINONIMOS`. |
@@ -112,6 +112,7 @@ Path: **`/api/zonas_catalogo` → `index.html` modal `#modalSelectorZona`**
 
 ## Historial de cambios recientes
 
+- **Monitoreo persistente**: Cambio en la query de `/` (index) para mostrar TODOS los trabajos no archivados con estado 'En Vía' o 'Liberado', sin filtro de fecha. Así los trabajos finalizados permanecen visibles en la ventana de monitoreo hasta que el usuario pulsa "Archivar Turno".
 - **NTA/NTP**: Agregadas a `ZONE_POSITIONS` (app.py:201-202) y clasificadas como `ptsa` en `_clasificar_zona`.
 - **Filtro chips/popover por categoría**: `renderChipsPorCategoria` y `onClicAreaZona` ahora respetan `filtroMapa` — en modo "Estaciones" solo se ven/eligen estaciones, sin tramos mezclados.
 - **Acceso a vía en importación**: Tanto en `importar_excel` como `importar_texto` y `_parsear_fila_fija`, ahora se salta filas solo si `acceso == 'NO'`; antes solo aceptaba `'SI'`. `estado` debe ser `'AUTORIZADA'` (antes era `'CONFIRMADA'`).
